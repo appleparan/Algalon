@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.110.14
+    container_name: algalon-victoriametrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/victoria-metrics-data
+    command:
+      - "--storageDataPath=/victoria-metrics-data"
+      - "--httpListenAddr=:8428"
+      - "--retentionPeriod=30d"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:4.2.3-4.1.3-ubuntu22.04
+    container_name: algalon-dcgm-exporter
+    ports:
+      - "9400:9400"
+    volumes:
+      - /etc/dcgm-exporter:/etc/dcgm-exporter
+      - ./dcgm-exporter-config.csv:/etc/dcgm-exporter/dcp-metrics-included.csv
+    environment:
+      - DCGM_EXPORTER_LISTEN=0.0.0.0:9400
+      - DCGM_EXPORTER_KUBERNETES=false
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
+    cap_add:
+      - SYS_ADMIN
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.110.14
+    container_name: algalon-vmagent
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - vmagent-data:/vmagentdata
+    command:
+      - "--promscrape.config=/etc/prometheus/prometheus.yml"
+      - "--remoteWrite.url=http://victoriametrics:8428/api/v1/write"
+    depends_on:
+      - victoriametrics
+      - dcgm-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:12.1.0-ubuntu
+    container_name: algalon-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  vm-data:
+  vmagent-data:
+  grafana-data:
+
+networks:
+  monitoring:
+    driver: bridge
