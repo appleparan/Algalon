@@ -1,9 +1,7 @@
 # targets/dcgm-targets.yml
 - targets:
-    # - 'gpu-node-1:9400'
-    # - 'gpu-node-2:9400'
-    # - 'gpu-node-3:9400'
-    - 'localhost:9400'  # Include current node
+    - 'localhost:9400'  # Current node
   labels:
     job: 'dcgm-exporter'
     cluster: 'production'
+    environment: 'gpu-cluster'
