@@ -223,7 +223,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": "$datasource",
+      "datasource": {
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
