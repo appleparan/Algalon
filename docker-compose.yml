@@ -51,19 +51,21 @@ services:
       - monitoring
 
   grafana:
-    image: grafana/grafana:12.1.0-ubuntu
+    image: grafana/grafana:12.0.3-ubuntu
     container_name: algalon-grafana
     ports:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=victoriametrics-metrics-datasource
-      - GF_PLUGINS_PLUGIN_ADMIN_ENABLED=false
+      - GF_PLUGINS_PREINSTALL=victoriametrics-metrics-datasource
+    #   - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=victoriametrics-metrics-datasource,grafana-metricsdrilldown-app,grafana-exploretraces-app,grafana-pyroscope-app,grafana-lokiexplore-app
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=victoriametrics-metrics-datasource
     depends_on:
       - victoriametrics
     restart: unless-stopped

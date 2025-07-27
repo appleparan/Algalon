@@ -2,17 +2,9 @@ apiVersion: 1
 
 datasources:
   - name: VictoriaMetrics
-    # type: prometheus
     type: victoriametrics-metrics-datasource
     uid: vm-gpu
     access: proxy
     url: http://victoriametrics:8428
     isDefault: true
     editable: true
-    httpMethod: POST
-    jsonData:
-      httpMethod: POST
-      manageAlerts: false
-      prometheusType: Prometheus
-      prometheusVersion: 2.40.0
-      cacheLevel: 'High'

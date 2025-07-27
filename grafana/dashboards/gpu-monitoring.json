@@ -20,8 +20,8 @@
     },
     {
       "type": "datasource",
-      "id": "victoriametrics-metrics-datasource",
-      "name": "VictoriaMetrics",
+      "id": "prometheus",
+      "name": "Prometheus",
       "version": "1.0.0"
     }
   ],
@@ -47,7 +47,7 @@
   "panels": [
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -124,7 +124,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_UTIL",
@@ -138,7 +138,7 @@
     },
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -215,7 +215,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_MEM_COPY_UTIL",
@@ -229,7 +229,7 @@
     },
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -304,7 +304,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_FB_USED * 1024 * 1024",
@@ -314,7 +314,7 @@
         },
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_FB_TOTAL * 1024 * 1024",
@@ -328,7 +328,7 @@
     },
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -403,7 +403,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_TEMP",
@@ -417,7 +417,7 @@
     },
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -472,7 +472,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_UTIL",
@@ -486,7 +486,7 @@
     },
     {
       "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "vm-gpu"
       },
       "fieldConfig": {
@@ -541,7 +541,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "victoriametrics-metrics-datasource",
+            "type": "prometheus",
             "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_MEM_COPY_UTIL",
