@@ -1,0 +1,24 @@
+services:
+  dcgm-exporter:
+    image: nvidia/dcgm-exporter:4.2.3-4.1.3-ubuntu22.04
+    container_name: algalon-dcgm-exporter
+    ports:
+      - "9400:9400"
+    volumes:
+      - /etc/dcgm-exporter:/etc/dcgm-exporter
+      - ./dcgm-exporter-config.csv:/etc/dcgm-exporter/dcp-metrics-included.csv
+      - ./default-counters.csv:/etc/dcgm-exporter/default-counters.csv      
+    environment:
+      - DCGM_EXPORTER_LISTEN=0.0.0.0:9400
+      - DCGM_EXPORTER_KUBERNETES=false
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
+    cap_add:
+      - SYS_ADMIN
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge

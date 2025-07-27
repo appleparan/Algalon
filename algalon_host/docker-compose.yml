@@ -14,38 +14,21 @@ services:
     networks:
       - monitoring
 
-  dcgm-exporter:
-    image: nvidia/dcgm-exporter:4.2.3-4.1.3-ubuntu22.04
-    container_name: algalon-dcgm-exporter
-    ports:
-      - "9400:9400"
-    volumes:
-      - /etc/dcgm-exporter:/etc/dcgm-exporter
-      - ./dcgm-exporter-config.csv:/etc/dcgm-exporter/dcp-metrics-included.csv
-      - ./default-counters.csv:/etc/dcgm-exporter/default-counters.csv
-    environment:
-      - DCGM_EXPORTER_LISTEN=0.0.0.0:9400
-      - DCGM_EXPORTER_KUBERNETES=false
-      - NVIDIA_VISIBLE_DEVICES=all
-    runtime: nvidia
-    cap_add:
-      - SYS_ADMIN
-    restart: unless-stopped
-    networks:
-      - monitoring
-
   vmagent:
     image: victoriametrics/vmagent:v1.122.0
     container_name: algalon-vmagent
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./node/targets:/etc/prometheus/targets  # Target file directory
       - vmagent-data:/vmagentdata
+    environment:
+      - HOSTNAME=${HOSTNAME:-$(hostname)}
     command:
       - "--promscrape.config=/etc/prometheus/prometheus.yml"
+      - "--promscrape.fileSDCheckInterval=30s"  # https://docs.victoriametrics.com/victoriametrics/sd_configs/#supported-service-discovery-configs
       - "--remoteWrite.url=http://victoriametrics:8428/api/v1/write"
     depends_on:
       - victoriametrics
-      - dcgm-exporter
     restart: unless-stopped
     networks:
       - monitoring
