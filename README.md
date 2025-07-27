@@ -1,54 +1,85 @@
 # Algalon 🌟
-*The GPU Observer - Complete GPU Monitoring Solution*
+*The GPU Observer - Distributed GPU Monitoring Solution*
 
-A Docker Compose-based GPU monitoring system that provides real-time insights into your NVIDIA GPU performance with clean, ID-based labeling and intuitive dashboards.
+A scalable, distributed GPU monitoring system built with Docker Compose that provides real-time insights into NVIDIA GPU performance across multiple remote worker nodes with clean, ID-based labeling and intuitive dashboards.
 
 ## ✨ Features
 
 - **🎯 GPU ID Display**: Shows GPU 0, 1, 2... instead of confusing UUIDs
+- **🌐 Distributed Architecture**: Monitor GPUs across multiple remote worker nodes
 - **📊 Memory & GPU Focused**: Dashboards centered on utilization metrics that matter
 - **⚡ Real-time Monitoring**: 5-second update intervals for live performance tracking
-- **🐋 Containerized**: Complete Docker Compose deployment
+- **🐋 Containerized**: Complete Docker Compose deployment with host/worker separation
 - **📈 Auto-provisioned**: Grafana dashboards and datasources ready out-of-the-box
 - **🔧 Production Ready**: Built with VictoriaMetrics for scalable time-series storage
+- **📡 Remote Scraping**: VMAgent collects metrics from distributed DCGM exporters
 
 ## 🏗️ Architecture
 
+### Distributed Setup
 ```
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   DCGM Exporter │───▶│   VMAgent    │───▶│ VictoriaMetrics │
-│  (GPU Metrics)  │    │ (Scraping)   │    │ (Time Series)   │
-└─────────────────┘    └──────────────┘    └─────────────────┘
-                                                      │
-┌─────────────────┐                                   │
-│     Grafana     │◀──────────────────────────────────┘
-│  (Dashboards)   │
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                          Host Node                              │
+│  ┌──────────────┐    ┌─────────────────┐    ┌─────────────────┐ │
+│  │   VMAgent    │───▶│ VictoriaMetrics │───▶│     Grafana     │ │
+│  │ (Scraping)   │    │ (Time Series)   │    │  (Dashboards)   │ │
+│  └──────┬───────┘    └─────────────────┘    └─────────────────┘ │
+└─────────┼───────────────────────────────────────────────────────┘
+          │ Remote scraping over network
+          │
+┌─────────▼─────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Worker Node 1   │  │   Worker Node 2  │  │   Worker Node N  │
+│ ┌───────────────┐ │  │ ┌───────────────┐│  │ ┌───────────────┐│
+│ │ DCGM Exporter │ │  │ │ DCGM Exporter ││  │ │ DCGM Exporter ││
+│ │ (GPU Metrics) │ │  │ │ (GPU Metrics) ││  │ │ (GPU Metrics) ││
+│ │    :9400      │ │  │ │    :9400      ││  │ │    :9400      ││
+│ └───────────────┘ │  │ └───────────────┘│  │ └───────────────┘│
+└───────────────────┘  └─────────────────┘  └─────────────────┘
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose
-- NVIDIA GPU with drivers
-- nvidia-docker2 runtime
+- **Host Node**: Docker & Docker Compose
+- **Worker Nodes**: Docker, NVIDIA GPU with drivers, nvidia-docker2 runtime
+- Network connectivity between host and worker nodes on port 9400
 
-### Installation
-1. Clone or create the project files
-2. Run the setup script:
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-3. Or start manually:
-   ```bash
-   docker-compose up -d
-   ```
+### Deployment Options
 
-### Access
-- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
-- **VictoriaMetrics UI**: http://localhost:8428
-- **Raw GPU Metrics**: http://localhost:9400/metrics
+#### Option 1: Single Node (Development/Testing)
+```bash
+chmod +x setup.sh
+./setup.sh --single-node
+```
+
+#### Option 2: Distributed Setup (Production)
+```bash
+# On monitoring host
+chmod +x setup.sh
+./setup.sh --host
+
+# On each GPU worker node  
+./setup.sh --worker
+```
+
+#### Option 3: Manual Setup
+```bash
+# Host node (monitoring & visualization)
+cd algalon_host
+docker-compose up -d
+
+# Worker nodes (GPU metrics)
+cd algalon_worker  
+docker-compose up -d
+```
+
+### Configuration
+1. **Edit worker targets**: Update `algalon_host/node/targets/dcgm-targets.yml` with actual worker IPs
+2. **Verify connectivity**: Ensure host can reach workers on port 9400
+3. **Access services**:
+   - **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+   - **VictoriaMetrics UI**: http://localhost:8428  
+   - **Worker Metrics**: http://worker-ip:9400/metrics
 
 ## 📊 Dashboard Overview
 
@@ -99,12 +130,31 @@ docker-compose logs dcgm-exporter
 - **Permission denied**: Check Docker daemon has GPU access
 - **Dashboard not loading**: Wait 30 seconds for all services to initialize
 
-## 📈 Scaling
+## 📈 Scaling & Production
 
-For multiple nodes or advanced setups:
-- Configure VMAgent for remote VictoriaMetrics clusters
-- Use Grafana's multi-datasource features
-- Deploy with Kubernetes for orchestration
+### Adding Worker Nodes
+1. Deploy worker on new GPU node: `./setup.sh --worker`
+2. Add worker IP to `algalon_host/node/targets/dcgm-targets.yml`
+3. VMAgent automatically discovers new targets within 30 seconds
+
+### Multi-Cluster Support
+```yaml
+# Different clusters with labels
+- targets: ['10.0.1.100:9400', '10.0.1.101:9400']
+  labels: {cluster: 'production', datacenter: 'dc1'}
+- targets: ['10.0.2.100:9400', '10.0.2.101:9400'] 
+  labels: {cluster: 'staging', datacenter: 'dc2'}
+```
+
+### High Availability
+- Deploy multiple VictoriaMetrics instances with clustering
+- Use Grafana's multi-datasource features for failover
+- Consider Kubernetes deployment for orchestration
+
+### Security Considerations
+- Restrict port 9400 access to monitoring hosts only
+- Use VPN or private networks for worker communication
+- Monitor resource usage of DCGM exporters
 
 ## 🤝 Contributing
 
