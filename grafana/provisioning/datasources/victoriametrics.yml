@@ -4,6 +4,7 @@ datasources:
   - name: VictoriaMetrics
     # type: prometheus
     type: victoriametrics-metrics-datasource
+    uid: vm-gpu
     access: proxy
     url: http://victoriametrics:8428
     isDefault: true

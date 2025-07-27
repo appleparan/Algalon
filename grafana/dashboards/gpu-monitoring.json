@@ -20,8 +20,8 @@
     },
     {
       "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
+      "id": "victoriametrics-metrics-datasource",
+      "name": "VictoriaMetrics",
       "version": "1.0.0"
     }
   ],
@@ -47,8 +47,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -124,8 +124,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_UTIL",
           "interval": "",
@@ -138,8 +138,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -215,8 +215,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_MEM_COPY_UTIL",
           "interval": "",
@@ -229,8 +229,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -304,8 +304,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_FB_USED * 1024 * 1024",
           "interval": "",
@@ -314,8 +314,8 @@
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_FB_TOTAL * 1024 * 1024",
           "interval": "",
@@ -328,8 +328,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -403,8 +403,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_TEMP",
           "interval": "",
@@ -417,8 +417,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -472,8 +472,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_GPU_UTIL",
           "interval": "",
@@ -486,8 +486,8 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_VICTORIAMETRICS}"
+        "type": "victoriametrics-metrics-datasource",
+        "uid": "vm-gpu"
       },
       "fieldConfig": {
         "defaults": {
@@ -541,8 +541,8 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_VICTORIAMETRICS}"
+            "type": "victoriametrics-metrics-datasource",
+            "uid": "vm-gpu"
           },
           "expr": "DCGM_FI_DEV_MEM_COPY_UTIL",
           "interval": "",
