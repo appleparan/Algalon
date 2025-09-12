@@ -1,18 +1,19 @@
 # Algalon 🌟
-*The GPU Observer - Distributed GPU Monitoring Solution*
+*The Comprehensive Hardware Observer - Multi-Platform Monitoring Solution*
 
-A scalable, distributed GPU monitoring system built with Docker Compose that provides real-time insights into NVIDIA GPU performance across multiple remote worker nodes with clean, ID-based labeling and intuitive dashboards.
+A scalable, distributed monitoring system built with Docker Compose that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Now powered by **all-smi** for enhanced multi-platform support.
 
 ## ✨ Features
 
-- **🎯 GPU ID Display**: Shows GPU 0, 1, 2... instead of confusing UUIDs
-- **🌐 Distributed Architecture**: Monitor GPUs across multiple remote worker nodes
-- **📊 Memory & GPU Focused**: Dashboards centered on utilization metrics that matter
+- **🎯 Hardware ID Display**: Shows GPU 0, 1, 2... and CPU cores with clear identification
+- **🌐 Distributed Architecture**: Monitor hardware across multiple remote worker nodes
+- **🚀 Multi-Platform Support**: NVIDIA GPUs, Apple Silicon, Jetson, NPUs via all-smi
+- **📊 Comprehensive Monitoring**: GPU + CPU + Memory + Process-level metrics
 - **⚡ Real-time Monitoring**: 5-second update intervals for live performance tracking
 - **🐋 Containerized**: Complete Docker Compose deployment with host/worker separation
 - **📈 Auto-provisioned**: Grafana dashboards and datasources ready out-of-the-box
 - **🔧 Production Ready**: Built with VictoriaMetrics for scalable time-series storage
-- **📡 Remote Scraping**: VMAgent collects metrics from distributed DCGM exporters
+- **📡 Remote Scraping**: VMAgent collects metrics from distributed all-smi exporters
 
 ## 🏗️ Architecture
 
@@ -30,8 +31,8 @@ A scalable, distributed GPU monitoring system built with Docker Compose that pro
 ┌─────────▼─────────┐  ┌─────────────────┐  ┌─────────────────┐
 │   Worker Node 1   │  │   Worker Node 2  │  │   Worker Node N  │
 │ ┌───────────────┐ │  │ ┌───────────────┐│  │ ┌───────────────┐│
-│ │ DCGM Exporter │ │  │ │ DCGM Exporter ││  │ │ DCGM Exporter ││
-│ │ (GPU Metrics) │ │  │ │ (GPU Metrics) ││  │ │ (GPU Metrics) ││
+│ │   all-smi     │ │  │ │   all-smi     ││  │ │   all-smi     ││
+│ │(GPU+CPU+Mem) │ │  │ │(GPU+CPU+Mem) ││  │ │(GPU+CPU+Mem) ││
 │ │    :9400      │ │  │ │    :9400      ││  │ │    :9400      ││
 │ └───────────────┘ │  │ └───────────────┘│  │ └───────────────┘│
 └───────────────────┘  └─────────────────┘  └─────────────────┘
@@ -41,7 +42,7 @@ A scalable, distributed GPU monitoring system built with Docker Compose that pro
 
 ### Prerequisites
 - **Host Node**: Docker & Docker Compose
-- **Worker Nodes**: Docker, NVIDIA GPU with drivers, nvidia-docker2 runtime
+- **Worker Nodes**: Docker, GPU with drivers (NVIDIA/Apple Silicon/NPU), appropriate runtime
 - Network connectivity between host and worker nodes on port 9400
 
 ### Deployment Options
@@ -83,67 +84,97 @@ docker-compose up -d
 
 ## 📊 Dashboard Overview
 
-### Main Panels
+### GPU Monitoring Dashboard
 - **GPU Utilization Timeline**: Real-time GPU usage across all devices
 - **Memory Utilization Timeline**: VRAM usage tracking
 - **Memory Usage Breakdown**: Used vs Total memory visualization
 - **Temperature Monitoring**: GPU thermal status
 - **Current Status Bars**: Instant utilization overview
 
+### System Monitoring Dashboard (NEW)
+- **CPU Utilization**: Per-core and per-socket CPU usage
+- **System Memory Usage**: Total and used system memory
+- **Process Monitoring**: GPU process-level resource allocation
+- **Multi-platform Metrics**: Platform-specific hardware insights
+
 ### Sample View
 ```
+🖥️  GPU Monitoring:
 GPU 0 Utilization: ████████░░ 85%
 GPU 1 Utilization: ██████░░░░ 62%
 GPU 2 Utilization: ███░░░░░░░ 31%
+
+💻 System Monitoring:
+CPU 0-3: ██████░░░░ 65%
+Memory:   ████████░░ 82% (6.2GB/8GB)
+Processes: 3 GPU tasks running
 ```
 
 ## 🛠️ Configuration
 
 ### Monitored Metrics
+**GPU Metrics**:
 - GPU Utilization (%)
-- Memory Utilization (%)
-- Memory Usage (Used/Total)
+- VRAM Utilization (%)
+- VRAM Usage (Used/Total)
 - GPU Temperature
 - Power Consumption
 - Clock Frequencies
 
+**System Metrics** (NEW):
+- CPU Utilization per core/socket
+- System Memory Usage
+- Process-level GPU allocation
+- Platform-specific metrics
+
 ### Customization
-- Edit `dcgm-exporter-config.csv` to add/remove metrics
+- Configure all-smi API parameters in docker-compose.yml
 - Modify dashboard panels in Grafana UI
 - Adjust retention period in VictoriaMetrics settings
+- Add custom labels in all-smi-targets.yml for multi-platform setups
 
 ## 🔧 Troubleshooting
 
-### Verify GPU Access
+### Verify Hardware Access
 ```bash
+# For NVIDIA GPUs
 docker run --rm --gpus all nvidia/cuda:11.0-base-ubuntu20.04 nvidia-smi
+
+# Test all-smi directly
+docker run --rm --gpus all ghcr.io/inureyes/all-smi:latest
 ```
 
 ### Check Service Status
 ```bash
-docker-compose ps
-docker-compose logs dcgm-exporter
+docker compose ps
+docker compose logs all-smi
+
+# Test metrics endpoint
+curl http://localhost:9400/metrics | grep all_smi
 ```
 
 ### Common Issues
-- **No GPU metrics**: Ensure nvidia-docker2 is properly installed
-- **Permission denied**: Check Docker daemon has GPU access
+- **No metrics**: Ensure appropriate GPU runtime is installed (nvidia-docker2 for NVIDIA)
+- **Permission denied**: Check Docker daemon has hardware access
 - **Dashboard not loading**: Wait 30 seconds for all services to initialize
+- **Platform not detected**: Verify all-smi supports your hardware platform
 
 ## 📈 Scaling & Production
 
 ### Adding Worker Nodes
-1. Deploy worker on new GPU node: `./setup.sh --worker`
-2. Add worker IP to `algalon_host/node/targets/dcgm-targets.yml`
+1. Deploy worker on new hardware node: `./setup.sh --worker`
+2. Add worker IP to `algalon_host/node/targets/all-smi-targets.yml`
 3. VMAgent automatically discovers new targets within 30 seconds
 
 ### Multi-Cluster Support
 ```yaml
-# Different clusters with labels
+# Different clusters with platform labels
 - targets: ['10.0.1.100:9400', '10.0.1.101:9400']
-  labels: {cluster: 'production', datacenter: 'dc1'}
+  labels: {cluster: 'production', platform: 'nvidia', datacenter: 'dc1'}
 - targets: ['10.0.2.100:9400', '10.0.2.101:9400'] 
-  labels: {cluster: 'staging', datacenter: 'dc2'}
+  labels: {cluster: 'staging', platform: 'apple', datacenter: 'dc2'}
+- targets: ['10.0.3.100:9400']
+  labels: {cluster: 'edge', platform: 'jetson', datacenter: 'dc3'}
 ```
 
 ### High Availability
@@ -153,8 +184,9 @@ docker-compose logs dcgm-exporter
 
 ### Security Considerations
 - Restrict port 9400 access to monitoring hosts only
-- Use VPN or private networks for worker communication
-- Monitor resource usage of DCGM exporters
+- Use VPN or private networks for worker communication  
+- Monitor resource usage of all-smi exporters
+- Implement platform-specific security policies
 
 ## 🤝 Contributing
 
