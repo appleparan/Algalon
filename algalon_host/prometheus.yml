@@ -2,10 +2,10 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'dcgm-exporter'
+  - job_name: 'all-smi'
     file_sd_configs:
       - files:
-          - '/etc/prometheus/targets/dcgm-*.yml'
+          - '/etc/prometheus/targets/all-smi-*.yml'
     scrape_interval: 5s
     scrape_timeout: 10s
     metrics_path: /metrics

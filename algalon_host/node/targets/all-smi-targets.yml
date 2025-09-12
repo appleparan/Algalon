@@ -1,0 +1,47 @@
+# targets/all-smi-targets.yml
+# Configuration for all-smi GPU/CPU monitoring worker nodes
+# Modify this for your environment
+
+- targets:
+    # - '10.0.1.100:9400'  # gpu-worker-01
+    # - '10.0.1.101:9400'  # gpu-worker-02
+    # - '10.0.1.102:9400'  # gpu-worker-03
+    - 'localhost:9400'  # Change localhost to current node's hostname or IP
+  labels:
+    job: 'all-smi'
+    cluster: 'production'
+    environment: 'gpu-cluster'
+    monitoring_type: 'comprehensive'  # all-smi provides GPU+CPU+Memory
+
+# Multi-cluster configuration example
+# - targets:
+#     - '10.0.2.100:9400'  # gpu-worker-04
+#     - '10.0.2.101:9400'  # gpu-worker-05
+#   labels:
+#     job: 'all-smi'
+#     cluster: 'staging'
+#     datacenter: 'dc2'
+#     monitoring_type: 'comprehensive'
+
+# Using hostnames instead of IPs
+# - targets:
+#     - 'gpu-node-1.example.com:9400'
+#     - 'gpu-node-2.example.com:9400'
+#     - 'gpu-node-3.example.com:9400'
+#   labels:
+#     job: 'all-smi'
+#     cluster: 'production'
+#     domain: 'example.com'
+#     monitoring_type: 'comprehensive'
+
+# Platform-specific labeling examples
+# - targets: ['10.0.3.100:9400']  # NVIDIA nodes
+#   labels:
+#     job: 'all-smi'
+#     platform: 'nvidia'
+#     gpu_type: 'cuda'
+# - targets: ['10.0.3.200:9400']  # Apple Silicon nodes
+#   labels:
+#     job: 'all-smi'
+#     platform: 'apple'
+#     gpu_type: 'metal'
