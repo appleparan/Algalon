@@ -1,6 +1,8 @@
 services:
   all-smi:
-    image: ghcr.io/inureyes/all-smi:latest
+    build:
+      context: https://github.com/inureyes/all-smi.git
+      dockerfile: Dockerfile
     container_name: algalon-all-smi
     ports:
       - "9400:9400"

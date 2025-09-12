@@ -95,11 +95,14 @@ setup_worker() {
     
     cd "${SCRIPT_DIR}/algalon_worker"
     
+    echo "🏗️ Building all-smi from source (this may take a few minutes)..."
+    docker compose build
+    
     echo "🚀 Starting all-smi Exporter..."
     docker compose up -d
     
     echo "⏳ Waiting for all-smi to start..."
-    sleep 10
+    sleep 15
     
     # Test metrics endpoint
     if curl -sf http://localhost:9400/metrics > /dev/null; then
@@ -132,11 +135,14 @@ setup_single_node() {
     
     # Setup worker first
     cd "${SCRIPT_DIR}/algalon_worker"
+    echo "🏗️ Building all-smi from source (this may take a few minutes)..."
+    docker compose build
+    
     echo "🚀 Starting all-smi Exporter..."
     docker compose up -d
     
     # Wait and verify worker
-    sleep 10
+    sleep 15
     if ! curl -sf http://localhost:9400/metrics > /dev/null; then
         echo -e "${RED}❌ all-smi Exporter failed to start${NC}"
         exit 1

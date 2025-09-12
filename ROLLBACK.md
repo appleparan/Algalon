@@ -30,10 +30,11 @@ curl http://localhost:9400/metrics | grep DCGM_FI_DEV
 ## Detailed Rollback Information
 
 ### What Gets Reverted
-- **Worker**: `all-smi` → `nvidia/dcgm-exporter:4.2.3-4.1.3-ubuntu22.04`
+- **Worker**: `all-smi` (local build) → `nvidia/dcgm-exporter:4.2.3-4.1.3-ubuntu22.04`
 - **Host Scraping**: `all-smi` job → `dcgm-exporter` job  
 - **Dashboards**: all-smi metrics → DCGM metrics
 - **Target Files**: all-smi-targets.yml removed
+- **Build Context**: Local all-smi build removed
 
 ### What Stays
 - VictoriaMetrics database (retains historical data)
@@ -56,7 +57,9 @@ curl http://localhost:9400/metrics | grep DCGM_FI_DEV
   - all-smi: `all_smi_gpu_utilization`, `all_smi_gpu_memory_used_bytes`
 
 ## Prevention for Future
-- Test all-smi in staging environment first
+- Test all-smi build process in staging environment first
 - Verify metric compatibility before production deployment  
 - Monitor system resource usage during transition
 - Have Docker environment properly configured before deployment
+- Ensure sufficient disk space for Rust compilation during local builds
+- Pre-build images in development environment to reduce deployment time
