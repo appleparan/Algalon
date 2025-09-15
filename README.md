@@ -169,18 +169,30 @@ docker compose up -d
 
 ## 📊 Dashboard Overview
 
-### GPU Monitoring Dashboard
+### GPU Monitoring Dashboard (DCGM-based)
 - **GPU Utilization Timeline**: Real-time GPU usage across all devices
 - **Memory Utilization Timeline**: VRAM usage tracking
-- **Memory Usage Breakdown**: Used vs Total memory visualization
+- **Memory Usage Breakdown**: Used vs Total memory visualization  
 - **Temperature Monitoring**: GPU thermal status
 - **Current Status Bars**: Instant utilization overview
 
-### System Monitoring Dashboard (NEW)
+### All-SMI Hardware Monitoring Dashboard (NEW)
+- **GPU Metrics**: Utilization, memory usage, temperature, power consumption
+- **CPU Monitoring**: System-wide CPU utilization
+- **Memory Usage**: System memory utilization percentage
+- **Disk Metrics**: Available space and utilization by device
+- **Process Monitoring**: Top processes with CPU/memory usage (table view)
+- **Multi-platform Support**: Works with NVIDIA, Apple Silicon, NPUs, etc.
+
+### System Monitoring Dashboard (Legacy)
 - **CPU Utilization**: Per-core and per-socket CPU usage
 - **System Memory Usage**: Total and used system memory
 - **Process Monitoring**: GPU process-level resource allocation
-- **Multi-platform Metrics**: Platform-specific hardware insights
+
+### Dashboard Access
+- **All-SMI Dashboard**: Comprehensive hardware monitoring for all-smi nodes
+- **GPU Dashboard**: DCGM-based monitoring for NVIDIA-specific setups
+- **System Dashboard**: Additional system metrics and legacy support
 
 ### Sample View
 ```
