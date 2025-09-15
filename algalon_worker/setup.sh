@@ -83,6 +83,9 @@ setup_worker() {
     export ALL_SMI_VERSION="${version}"
     export ALL_SMI_PORT="${port}"
     
+    echo "🏗️ Generating Dockerfile for all-smi ${version}..."
+    ./generate-dockerfile.sh "${version}" "${port}"
+    
     echo "🏗️ Building all-smi ${version} from source (this may take a few minutes)..."
     docker compose build
     

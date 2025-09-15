@@ -1,0 +1,11 @@
+# Generated files
+algalon_worker/Dockerfile
+
+# Environment files
+algalon_worker/.env
+
+# Docker volumes
+.volumes/
+
+# Logs
+*.log

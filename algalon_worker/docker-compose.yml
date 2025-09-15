@@ -3,15 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - ALL_SMI_VERSION=${ALL_SMI_VERSION:-v0.9.0}
-        - PORT=${ALL_SMI_PORT:-9090}
     container_name: algalon-all-smi
     ports:
       - "${ALL_SMI_PORT:-9090}:${ALL_SMI_PORT:-9090}"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - ALL_SMI_PORT=${ALL_SMI_PORT:-9090}
     runtime: nvidia
     cap_add:
       - SYS_ADMIN
