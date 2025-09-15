@@ -19,7 +19,9 @@ print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --help         Show this help message"
+    echo "  --version <ver>     all-smi version to build (default: v0.9.0)"
+    echo "  --port <port>       Port for all-smi API (default: 9090)"
+    echo "  --help              Show this help message"
     echo ""
     echo "Description:"
     echo "  Sets up a hardware worker node with all-smi exporter that provides"
@@ -31,7 +33,10 @@ print_usage() {
     echo "  - Appropriate container runtime (nvidia-docker2 for NVIDIA)"
     echo ""
     echo "Examples:"
-    echo "  $0              # Setup worker node"
+    echo "  $0                           # Setup with defaults (v0.9.0, port 9090)"
+    echo "  $0 --version v0.8.0          # Use specific version"
+    echo "  $0 --port 8080               # Use custom port"
+    echo "  $0 --version v0.9.0 --port 9091  # Custom version and port"
     echo ""
 }
 
@@ -64,24 +69,34 @@ check_hardware_runtime() {
 }
 
 setup_worker() {
+    local version="${1:-v0.9.0}"
+    local port="${2:-9090}"
+    
     echo -e "${BLUE}🏗️  Setting up Algalon Worker (Hardware Metrics Exporter)...${NC}"
+    echo "   🏷️  all-smi version: ${version}"
+    echo "   🔌 Port: ${port}"
+    echo ""
     
     check_hardware_runtime
     
-    echo "🏗️ Building all-smi from source (this may take a few minutes)..."
+    # Export environment variables for docker-compose
+    export ALL_SMI_VERSION="${version}"
+    export ALL_SMI_PORT="${port}"
+    
+    echo "🏗️ Building all-smi ${version} from source (this may take a few minutes)..."
     docker compose build
     
-    echo "🚀 Starting all-smi Exporter..."
+    echo "🚀 Starting all-smi Exporter on port ${port}..."
     docker compose up -d
     
     echo "⏳ Waiting for all-smi to start..."
     sleep 15
     
     # Test metrics endpoint
-    if curl -sf http://localhost:9090/metrics > /dev/null; then
+    if curl -sf http://localhost:${port}/metrics > /dev/null; then
         echo -e "${GREEN}🎉 Algalon Worker is ready!${NC}"
         echo ""
-        echo "📊 Metrics endpoint: http://$(hostname -I | awk '{print $1}'):9090/metrics"
+        echo "📊 Metrics endpoint: http://$(hostname -I | awk '{print $1}'):${port}/metrics"
         echo ""
         echo "📋 Hardware Information:"
         if command -v nvidia-smi &> /dev/null; then
@@ -93,18 +108,18 @@ setup_worker() {
         echo "   Platform: $(uname -m) ($(uname -s))"
         echo ""
         echo "📝 Next steps:"
-        echo "   1. Add this worker IP ($(hostname -I | awk '{print $1}'):9090) to host's all-smi-targets.yml"
+        echo "   1. Add this worker IP ($(hostname -I | awk '{print $1}'):${port}) to host's all-smi-targets.yml"
         echo "   2. Restart host VMAgent to discover this worker: docker compose restart vmagent"
         echo ""
         echo "🧪 Test commands:"
         echo "   # Basic connectivity"
-        echo "   curl -f http://localhost:9090/metrics"
+        echo "   curl -f http://localhost:${port}/metrics"
         echo ""
         echo "   # Check GPU metrics"
-        echo "   curl -s http://localhost:9090/metrics | grep -E '(gpu|cuda|metal)'"
+        echo "   curl -s http://localhost:${port}/metrics | grep -E '(gpu|cuda|metal)'"
         echo ""
         echo "   # Monitor in real-time"
-        echo "   watch -n 5 'curl -s http://localhost:9090/metrics | grep all_smi_gpu_utilization'"
+        echo "   watch -n 5 'curl -s http://localhost:${port}/metrics | grep all_smi_gpu_utilization'"
     else
         echo -e "${RED}❌ Failed to start all-smi Exporter. Check logs: docker compose logs${NC}"
         echo ""
@@ -116,18 +131,32 @@ setup_worker() {
     fi
 }
 
+# Parse command line arguments
+ALL_SMI_VERSION="v0.9.0"
+ALL_SMI_PORT="9090"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --version)
+            ALL_SMI_VERSION="$2"
+            shift 2
+            ;;
+        --port)
+            ALL_SMI_PORT="$2"
+            shift 2
+            ;;
+        --help|-h)
+            print_usage
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown option: $1${NC}"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
 # Main script logic
-case "${1:-}" in
-    --help|-h)
-        print_usage
-        ;;
-    "")
-        check_docker
-        setup_worker
-        ;;
-    *)
-        echo -e "${RED}❌ Unknown option: $1${NC}"
-        print_usage
-        exit 1
-        ;;
-esac
+check_docker
+setup_worker "${ALL_SMI_VERSION}" "${ALL_SMI_PORT}"

@@ -18,19 +18,23 @@ print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --host         Setup monitoring host (VictoriaMetrics + Grafana)"
-    echo "  --worker       Setup hardware worker node (all-smi Exporter)"
-    echo "  --single-node  Setup all components on single node (development)"
-    echo "  --help         Show this help message"
+    echo "  --host                     Setup monitoring host (VictoriaMetrics + Grafana)"
+    echo "  --worker                   Setup hardware worker node (all-smi Exporter)"
+    echo "  --single-node              Setup all components on single node (development)"
+    echo "  --version <ver>            all-smi version for worker (default: v0.9.0)"
+    echo "  --port <port>              Port for all-smi API (default: 9090)"
+    echo "  --help                     Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 --host               # Setup monitoring host"
-    echo "  $0 --worker             # Setup GPU worker node"
-    echo "  $0 --single-node        # All-in-one setup"
+    echo "  $0 --host                           # Setup monitoring host"
+    echo "  $0 --worker                         # Setup worker (v0.9.0, port 9090)"
+    echo "  $0 --worker --version v0.8.0        # Worker with specific version"
+    echo "  $0 --worker --port 8080             # Worker with custom port"
+    echo "  $0 --single-node --port 9091        # Single-node with custom port"
     echo ""
     echo "📁 Individual component setup:"
-    echo "  cd algalon_host && ./setup.sh     # Host setup only"
-    echo "  cd algalon_worker && ./setup.sh   # Worker setup only"
+    echo "  cd algalon_host && ./setup.sh                    # Host setup only"
+    echo "  cd algalon_worker && ./setup.sh --version v0.8.0 # Worker with version"
     echo ""
 }
 
@@ -72,15 +76,21 @@ setup_host() {
 }
 
 setup_worker() {
+    local version="${1:-v0.9.0}"
+    local port="${2:-9090}"
+    
     echo -e "${BLUE}🏗️  Setting up Algalon Worker (Hardware Metrics Exporter)...${NC}"
     echo "   Using dedicated worker setup script..."
     echo ""
     
     cd "${SCRIPT_DIR}/algalon_worker"
-    ./setup.sh
+    ./setup.sh --version "${version}" --port "${port}"
 }
 
 setup_single_node() {
+    local version="${1:-v0.9.0}"
+    local port="${2:-9090}"
+    
     echo -e "${BLUE}🏗️  Setting up Algalon Single Node (All components)...${NC}"
     echo "   Setting up worker and host components in sequence..."
     echo ""
@@ -88,16 +98,16 @@ setup_single_node() {
     # Setup worker first using dedicated script
     echo -e "${YELLOW}📦 Step 1: Setting up worker component${NC}"
     cd "${SCRIPT_DIR}/algalon_worker"
-    ./setup.sh
+    ./setup.sh --version "${version}" --port "${port}"
     
     # Ensure target points to localhost for single-node
     echo -e "${YELLOW}📦 Step 2: Configuring host for single-node${NC}"
     cd "${SCRIPT_DIR}/algalon_host"
     
-    if ! grep -q "localhost:9090" node/targets/all-smi-targets.yml; then
+    if ! grep -q "localhost:${port}" node/targets/all-smi-targets.yml; then
         echo "# Single-node configuration" > node/targets/all-smi-targets.yml
         echo "- targets:" >> node/targets/all-smi-targets.yml
-        echo "    - 'localhost:9090'" >> node/targets/all-smi-targets.yml
+        echo "    - 'localhost:${port}'" >> node/targets/all-smi-targets.yml
         echo "  labels:" >> node/targets/all-smi-targets.yml
         echo "    job: 'all-smi'" >> node/targets/all-smi-targets.yml
         echo "    cluster: 'development'" >> node/targets/all-smi-targets.yml
@@ -116,31 +126,62 @@ setup_single_node() {
     echo "   - All-SMI System Monitoring Dashboard (NEW)"
 }
 
+# Parse command line arguments
+MODE=""
+ALL_SMI_VERSION="v0.9.0"
+ALL_SMI_PORT="9090"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --host)
+            MODE="host"
+            shift
+            ;;
+        --worker)
+            MODE="worker"
+            shift
+            ;;
+        --single-node)
+            MODE="single-node"
+            shift
+            ;;
+        --version)
+            ALL_SMI_VERSION="$2"
+            shift 2
+            ;;
+        --port)
+            ALL_SMI_PORT="$2"
+            shift 2
+            ;;
+        --help|-h)
+            print_usage
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown option: $1${NC}"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
 # Main script logic
-case "${1:-}" in
-    --host)
-        check_docker
+if [[ -z "$MODE" ]]; then
+    echo -e "${YELLOW}⚠️  No mode specified. Use --help to see available options.${NC}"
+    print_usage
+    exit 1
+fi
+
+check_docker
+
+case "$MODE" in
+    host)
         setup_host
         ;;
-    --worker)
-        check_docker
-        setup_worker
+    worker)
+        setup_worker "${ALL_SMI_VERSION}" "${ALL_SMI_PORT}"
         ;;
-    --single-node)
-        check_docker
-        setup_single_node
-        ;;
-    --help|-h)
-        print_usage
-        ;;
-    "")
-        echo -e "${YELLOW}⚠️  No option specified. Use --help to see available options.${NC}"
-        print_usage
-        exit 1
-        ;;
-    *)
-        echo -e "${RED}❌ Unknown option: $1${NC}"
-        print_usage
-        exit 1
+    single-node)
+        setup_single_node "${ALL_SMI_VERSION}" "${ALL_SMI_PORT}"
         ;;
 esac

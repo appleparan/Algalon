@@ -1,17 +1,21 @@
 services:
   all-smi:
     build:
-      context: https://github.com/inureyes/all-smi.git
+      context: .
       dockerfile: Dockerfile
+      args:
+        - ALL_SMI_VERSION=${ALL_SMI_VERSION:-v0.9.0}
+        - PORT=${ALL_SMI_PORT:-9090}
     container_name: algalon-all-smi
     ports:
-      - "9090:9090"
+      - "${ALL_SMI_PORT:-9090}:${ALL_SMI_PORT:-9090}"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - ALL_SMI_PORT=${ALL_SMI_PORT:-9090}
     runtime: nvidia
     cap_add:
       - SYS_ADMIN
-    command: ["api", "--port", "9090", "--interval", "5", "--processes"]
+    command: ["api", "--port", "${ALL_SMI_PORT:-9090}", "--interval", "5", "--processes"]
     restart: unless-stopped
     networks:
       - monitoring
