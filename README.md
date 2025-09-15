@@ -153,6 +153,66 @@ docker compose logs all-smi
 curl http://localhost:9090/metrics | grep all_smi
 ```
 
+### API Testing with curl
+
+The all-smi service provides a comprehensive Prometheus metrics endpoint. Test various aspects of the API:
+
+```bash
+# Basic connectivity test
+curl -f http://localhost:9090/metrics
+
+# Check GPU metrics (NVIDIA/Apple Silicon/NPU)
+curl -s http://localhost:9090/metrics | grep -E "(gpu|cuda|metal|npu)"
+
+# Monitor CPU metrics
+curl -s http://localhost:9090/metrics | grep -E "(cpu|core)"
+
+# Check memory utilization
+curl -s http://localhost:9090/metrics | grep -E "(memory|mem)"
+
+# View temperature sensors
+curl -s http://localhost:9090/metrics | grep temperature
+
+# Check power consumption
+curl -s http://localhost:9090/metrics | grep power
+
+# Process-level monitoring (if --processes enabled)
+curl -s http://localhost:9090/metrics | grep process
+
+# Get specific metric with value
+curl -s http://localhost:9090/metrics | grep "all_smi_gpu_utilization"
+
+# Monitor in real-time (updates every 5 seconds by default)
+watch -n 5 'curl -s http://localhost:9090/metrics | grep "all_smi_gpu_utilization"'
+```
+
+#### Remote Worker Testing
+```bash
+# Test remote worker connectivity
+curl -f http://worker-ip:9090/metrics
+
+# Check multiple workers
+for ip in 10.0.1.100 10.0.1.101; do
+  echo "Testing worker: $ip"
+  curl -f http://$ip:9090/metrics >/dev/null && echo "✅ OK" || echo "❌ Failed"
+done
+```
+
+#### Platform-Specific Metrics
+```bash
+# NVIDIA GPU metrics
+curl -s http://localhost:9090/metrics | grep -E "(nvidia|cuda)"
+
+# Apple Silicon metrics
+curl -s http://localhost:9090/metrics | grep -E "(apple|metal)"
+
+# NPU/AI accelerator metrics  
+curl -s http://localhost:9090/metrics | grep -E "(npu|ai|tpu)"
+
+# Generic platform detection
+curl -s http://localhost:9090/metrics | grep "all_smi_info"
+```
+
 ### Common Issues
 - **No metrics**: Ensure appropriate GPU runtime is installed (nvidia-docker2 for NVIDIA)
 - **Permission denied**: Check Docker daemon has hardware access
