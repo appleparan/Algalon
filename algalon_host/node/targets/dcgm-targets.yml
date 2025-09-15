@@ -3,10 +3,10 @@
 # Modify this for your environment
 
 - targets:
-    # - '10.0.1.100:9400'  # gpu-worker-01
-    # - '10.0.1.101:9400'  # gpu-worker-02
-    # - '10.0.1.102:9400'  # gpu-worker-03
-    - 'localhost:9400'  # Change localhost to current node's hostname or IP
+    # - '10.0.1.100:9090'  # gpu-worker-01
+    # - '10.0.1.101:9090'  # gpu-worker-02
+    # - '10.0.1.102:9090'  # gpu-worker-03
+    - 'localhost:9090'  # Change localhost to current node's hostname or IP
   labels:
     job: 'dcgm-exporter'
     cluster: 'production'
@@ -14,8 +14,8 @@
 
 # Multi-cluster configuration example
 # - targets:
-#     - '10.0.2.100:9400'  # gpu-worker-04
-#     - '10.0.2.101:9400'  # gpu-worker-05
+#     - '10.0.2.100:9090'  # gpu-worker-04
+#     - '10.0.2.101:9090'  # gpu-worker-05
 #   labels:
 #     job: 'dcgm-exporter'
 #     cluster: 'staging'
@@ -23,9 +23,9 @@
 
 # Using hostnames instead of IPs
 # - targets:
-#     - 'gpu-node-1.example.com:9400'
-#     - 'gpu-node-2.example.com:9400'
-#     - 'gpu-node-3.example.com:9400'
+#     - 'gpu-node-1.example.com:9090'
+#     - 'gpu-node-2.example.com:9090'
+#     - 'gpu-node-3.example.com:9090'
 #   labels:
 #     job: 'dcgm-exporter'
 #     cluster: 'production'

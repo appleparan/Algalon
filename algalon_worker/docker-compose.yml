@@ -5,13 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: algalon-all-smi
     ports:
-      - "9400:9400"
+      - "9090:9090"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     runtime: nvidia
     cap_add:
       - SYS_ADMIN
-    command: ["api", "--port", "9400", "--interval", "5", "--processes"]
+    command: ["api", "--port", "9090", "--interval", "5", "--processes"]
     restart: unless-stopped
     networks:
       - monitoring

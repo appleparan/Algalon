@@ -24,7 +24,7 @@ docker compose restart vmagent grafana
 
 ### Step 3: Verify DCGM Metrics
 ```bash
-curl http://localhost:9400/metrics | grep DCGM_FI_DEV
+curl http://localhost:9090/metrics | grep DCGM_FI_DEV
 ```
 
 ## Detailed Rollback Information

@@ -33,7 +33,7 @@ A scalable, distributed monitoring system built with Docker Compose that provide
 │ ┌───────────────┐ │  │ ┌───────────────┐│  │ ┌───────────────┐│
 │ │   all-smi     │ │  │ │   all-smi     ││  │ │   all-smi     ││
 │ │(GPU+CPU+Mem) │ │  │ │(GPU+CPU+Mem) ││  │ │(GPU+CPU+Mem) ││
-│ │    :9400      │ │  │ │    :9400      ││  │ │    :9400      ││
+│ │    :9090      │ │  │ │    :9090      ││  │ │    :9090      ││
 │ └───────────────┘ │  │ └───────────────┘│  │ └───────────────┘│
 └───────────────────┘  └─────────────────┘  └─────────────────┘
 ```
@@ -43,7 +43,7 @@ A scalable, distributed monitoring system built with Docker Compose that provide
 ### Prerequisites
 - **Host Node**: Docker & Docker Compose
 - **Worker Nodes**: Docker, GPU with drivers (NVIDIA/Apple Silicon/NPU), appropriate runtime
-- Network connectivity between host and worker nodes on port 9400
+- Network connectivity between host and worker nodes on port 9090
 
 ### Deployment Options
 
@@ -76,11 +76,11 @@ docker-compose up -d
 
 ### Configuration
 1. **Edit worker targets**: Update `algalon_host/node/targets/dcgm-targets.yml` with actual worker IPs
-2. **Verify connectivity**: Ensure host can reach workers on port 9400
+2. **Verify connectivity**: Ensure host can reach workers on port 9090
 3. **Access services**:
    - **Grafana Dashboard**: http://localhost:3000 (admin/admin)
    - **VictoriaMetrics UI**: http://localhost:8428  
-   - **Worker Metrics**: http://worker-ip:9400/metrics
+   - **Worker Metrics**: http://worker-ip:9090/metrics
 
 ## 📊 Dashboard Overview
 
@@ -150,7 +150,7 @@ docker compose ps
 docker compose logs all-smi
 
 # Test metrics endpoint
-curl http://localhost:9400/metrics | grep all_smi
+curl http://localhost:9090/metrics | grep all_smi
 ```
 
 ### Common Issues
@@ -169,11 +169,11 @@ curl http://localhost:9400/metrics | grep all_smi
 ### Multi-Cluster Support
 ```yaml
 # Different clusters with platform labels
-- targets: ['10.0.1.100:9400', '10.0.1.101:9400']
+- targets: ['10.0.1.100:9090', '10.0.1.101:9090']
   labels: {cluster: 'production', platform: 'nvidia', datacenter: 'dc1'}
-- targets: ['10.0.2.100:9400', '10.0.2.101:9400'] 
+- targets: ['10.0.2.100:9090', '10.0.2.101:9090'] 
   labels: {cluster: 'staging', platform: 'apple', datacenter: 'dc2'}
-- targets: ['10.0.3.100:9400']
+- targets: ['10.0.3.100:9090']
   labels: {cluster: 'edge', platform: 'jetson', datacenter: 'dc3'}
 ```
 
@@ -183,7 +183,7 @@ curl http://localhost:9400/metrics | grep all_smi
 - Consider Kubernetes deployment for orchestration
 
 ### Security Considerations
-- Restrict port 9400 access to monitoring hosts only
+- Restrict port 9090 access to monitoring hosts only
 - Use VPN or private networks for worker communication  
 - Monitor resource usage of all-smi exporters
 - Implement platform-specific security policies

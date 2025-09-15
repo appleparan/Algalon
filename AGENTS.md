@@ -25,7 +25,7 @@ A complete Docker Compose-based GPU monitoring solution that displays GPU metric
 **Completed Tasks**:
 - ✅ Updated worker docker-compose.yml to use `ghcr.io/inureyes/all-smi:latest`
 - ✅ Configured all-smi container with API mode and process monitoring
-- ✅ Set Prometheus metrics endpoint on port 9400
+- ✅ Set Prometheus metrics endpoint on port 9090
 - ✅ Maintained NVIDIA runtime and network settings
 
 ### Phase 2: Host Scraping Configuration ✅
@@ -103,7 +103,7 @@ A complete Docker Compose-based GPU monitoring solution that displays GPU metric
 ## Access Points
 - **Grafana**: http://localhost:3000
 - **VictoriaMetrics**: http://localhost:8428
-- **all-smi Metrics**: http://localhost:9400/metrics (or configured port)
+- **all-smi Metrics**: http://localhost:9090/metrics (or configured port)
 
 ## Configuration
 The system automatically configures:

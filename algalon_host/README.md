@@ -15,8 +15,8 @@ Edit `node/targets/dcgm-targets.yml` to add your GPU worker nodes:
 
 ```yaml
 - targets:
-    - '192.168.1.100:9400'  # Replace with actual worker IP
-    - '192.168.1.101:9400'  # Add more workers as needed
+    - '192.168.1.100:9090'  # Replace with actual worker IP
+    - '192.168.1.101:9090'  # Add more workers as needed
   labels:
     job: 'dcgm-exporter'
     cluster: 'production'
@@ -24,14 +24,14 @@ Edit `node/targets/dcgm-targets.yml` to add your GPU worker nodes:
 
 ### Deployment Steps
 1. Configure worker node IPs in `dcgm-targets.yml`
-2. Ensure worker nodes are running dcgm-exporter on port 9400
+2. Ensure worker nodes are running dcgm-exporter on port 9090
 3. Start monitoring stack: `docker-compose up -d`
 4. Access Grafana at http://localhost:3000 (admin/admin)
 
 ### Network Requirements
-- Host must be able to reach worker nodes on port 9400
+- Host must be able to reach worker nodes on port 9090
 - No special Docker networking needed (uses standard bridge)
-- Worker nodes should have dcgm-exporter exposed on 0.0.0.0:9400
+- Worker nodes should have dcgm-exporter exposed on 0.0.0.0:9090
 
 ### Scaling
 - Add new worker IPs to `dcgm-targets.yml`

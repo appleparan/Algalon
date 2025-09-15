@@ -64,7 +64,7 @@ setup_host() {
     cd "${SCRIPT_DIR}/algalon_host"
     
     # Check if targets are configured
-    if grep -q "localhost:9400" node/targets/all-smi-targets.yml; then
+    if grep -q "localhost:9090" node/targets/all-smi-targets.yml; then
         echo -e "${YELLOW}⚠️  Worker targets are using localhost${NC}"
         echo "   Please update algalon_host/node/targets/all-smi-targets.yml with actual worker IPs"
         echo ""
@@ -105,10 +105,10 @@ setup_worker() {
     sleep 15
     
     # Test metrics endpoint
-    if curl -sf http://localhost:9400/metrics > /dev/null; then
+    if curl -sf http://localhost:9090/metrics > /dev/null; then
         echo -e "${GREEN}🎉 Algalon Worker is ready!${NC}"
         echo ""
-        echo "📊 Metrics endpoint: http://$(hostname -I | awk '{print $1}'):9400/metrics"
+        echo "📊 Metrics endpoint: http://$(hostname -I | awk '{print $1}'):9090/metrics"
         echo ""
         echo "📋 Hardware Information:"
         if command -v nvidia-smi &> /dev/null; then
@@ -143,7 +143,7 @@ setup_single_node() {
     
     # Wait and verify worker
     sleep 15
-    if ! curl -sf http://localhost:9400/metrics > /dev/null; then
+    if ! curl -sf http://localhost:9090/metrics > /dev/null; then
         echo -e "${RED}❌ all-smi Exporter failed to start${NC}"
         exit 1
     fi
@@ -152,10 +152,10 @@ setup_single_node() {
     cd "${SCRIPT_DIR}/algalon_host"
     
     # Ensure target points to localhost for single-node
-    if ! grep -q "localhost:9400" node/targets/all-smi-targets.yml; then
+    if ! grep -q "localhost:9090" node/targets/all-smi-targets.yml; then
         echo "# Single-node configuration" > node/targets/all-smi-targets.yml
         echo "- targets:" >> node/targets/all-smi-targets.yml
-        echo "    - 'localhost:9400'" >> node/targets/all-smi-targets.yml
+        echo "    - 'localhost:9090'" >> node/targets/all-smi-targets.yml
         echo "  labels:" >> node/targets/all-smi-targets.yml
         echo "    job: 'all-smi'" >> node/targets/all-smi-targets.yml
         echo "    cluster: 'development'" >> node/targets/all-smi-targets.yml
@@ -173,7 +173,7 @@ setup_single_node() {
     echo "📊 Access points:"
     echo "   - Grafana Dashboard: http://localhost:3000 (admin/admin)"
     echo "   - VictoriaMetrics: http://localhost:8428"
-    echo "   - all-smi Metrics: http://localhost:9400/metrics"
+    echo "   - all-smi Metrics: http://localhost:9090/metrics"
     echo ""
     echo "📋 Hardware Information:"
     if command -v nvidia-smi &> /dev/null; then
