@@ -1,7 +1,7 @@
 # Algalon 🌟
 *The Comprehensive Hardware Observer - Multi-Platform Monitoring Solution*
 
-A scalable, distributed monitoring system that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Now powered by **all-smi** for enhanced multi-platform support.
+A scalable, distributed monitoring system that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Powered by **[all-smi](https://github.com/inureyes/all-smi)** for comprehensive multi-platform hardware monitoring.
 
 Deploy with **Terraform** for production-ready infrastructure or **Docker Compose** for development and testing.
 
@@ -579,6 +579,12 @@ Contributions welcome! Areas for improvement:
 - Cost estimation and optimization
 
 **👉 [See testing guide](TESTING.md)**
+
+## 🙏 Credits
+
+This project is powered by **[all-smi](https://github.com/inureyes/all-smi)** - A comprehensive hardware monitoring tool that provides unified metrics collection across multiple platforms including NVIDIA GPUs, Apple Silicon, Jetson devices, and NPUs.
+
+Special thanks to the all-smi project for enabling cross-platform hardware monitoring and making it possible to create truly universal GPU monitoring solutions.
 
 ## 📝 License
 
