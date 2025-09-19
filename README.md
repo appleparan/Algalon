@@ -1,7 +1,9 @@
 # Algalon 🌟
 *The Comprehensive Hardware Observer - Multi-Platform Monitoring Solution*
 
-A scalable, distributed monitoring system built with Docker Compose that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Now powered by **all-smi** for enhanced multi-platform support.
+A scalable, distributed monitoring system that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Now powered by **all-smi** for enhanced multi-platform support.
+
+Deploy with **Terraform** for production-ready infrastructure or **Docker Compose** for development and testing.
 
 ## ✨ Features
 
@@ -9,11 +11,13 @@ A scalable, distributed monitoring system built with Docker Compose that provide
 - **🌐 Distributed Architecture**: Monitor hardware across multiple remote worker nodes
 - **🚀 Multi-Platform Support**: NVIDIA GPUs, Apple Silicon, Jetson, NPUs via all-smi
 - **📊 Comprehensive Monitoring**: GPU + CPU + Memory + Process-level metrics
-- **⚡ Real-time Monitoring**: 5-second update intervals for live performance tracking
+- **⚡ Real-time Monitoring**: Configurable update intervals for live performance tracking
+- **🏗️ Infrastructure as Code**: Deploy with Terraform for cloud-native scalability
 - **🐋 Containerized**: Complete Docker Compose deployment with host/worker separation
 - **📈 Auto-provisioned**: Grafana dashboards and datasources ready out-of-the-box
 - **🔧 Production Ready**: Built with VictoriaMetrics for scalable time-series storage
 - **📡 Remote Scraping**: VMAgent collects metrics from distributed all-smi exporters
+- **☁️ Cloud Ready**: Native Google Cloud Platform support with auto-scaling
 
 ## 🏗️ Architecture
 
@@ -41,15 +45,57 @@ A scalable, distributed monitoring system built with Docker Compose that provide
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Host Node**: Docker & Docker Compose
-- **Worker Nodes**: Docker, GPU with drivers (NVIDIA/Apple Silicon/NPU), appropriate runtime
-- Network connectivity between host and worker nodes on port 9090
+- **For Terraform**: Terraform >= 1.6, Google Cloud account with appropriate permissions
+- **For Docker Compose**: Docker & Docker Compose
+- **Worker Nodes**: GPU with drivers (NVIDIA/Apple Silicon/NPU), appropriate container runtime
+- Network connectivity between host and worker nodes
 
-## 📦 Deployment Guide
+## 📦 Deployment Options
 
-### Automated Setup (Recommended)
+Choose your deployment method based on your needs:
 
-The setup scripts provide flexible deployment options with configurable all-smi versions and ports.
+### 🏗️ Terraform Deployment (Recommended for Production)
+
+**Production-ready cloud deployment with auto-scaling and infrastructure management.**
+
+#### Quick Start with Terraform
+
+```bash
+# Clone repository
+git clone https://github.com/inureyes/Algalon.git
+cd Algalon/terraform/examples/basic
+
+# Configure deployment
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your project settings
+
+# Deploy infrastructure
+terraform init
+terraform apply
+```
+
+#### What You Get
+- ✅ **Automated Infrastructure**: VPC, firewall rules, compute instances
+- ✅ **Auto-scaling Workers**: Managed instance groups with health checks
+- ✅ **Cost Optimization**: Preemptible instances and auto-shutdown
+- ✅ **Security**: Restricted access and service accounts
+- ✅ **Monitoring**: Built-in logging and monitoring integration
+
+#### Configuration Example
+```hcl
+# terraform.tfvars
+project_id = "your-gcp-project"
+deployment_name = "algalon-prod"
+worker_count = 3
+gpu_type = "nvidia-tesla-v100"
+cluster_name = "ml-training"
+```
+
+**👉 [See detailed Terraform guide](terraform/README.md)**
+
+### 🐋 Docker Compose Deployment
+
+**Flexible local deployment for development and testing.**
 
 #### Quick Start Options
 
@@ -67,36 +113,35 @@ chmod +x setup.sh
 
 #### Advanced Configuration
 
-**Custom all-smi Version and Port:**
+**Custom all-smi Version, Port, and Interval:**
 ```bash
 # Use specific all-smi version
 ./setup.sh --worker --version v0.8.0
 
-# Use custom port
-./setup.sh --worker --port 8080
+# Use custom port and interval
+./setup.sh --worker --port 8080 --interval 10
 
-# Both version and port
-./setup.sh --worker --version v0.9.0 --port 9091
-./setup.sh --single-node --version v0.9.0 --port 9091
+# Full customization
+./setup.sh --worker --version v0.9.0 --port 9091 --interval 3
 ```
 
-**Available Versions:**
-- `v0.9.0` (default, latest stable)
-- `v0.8.0` (previous stable)
-- `main` (development branch)
+**Available Options:**
+- **Versions**: `v0.9.0` (default), `v0.8.0`, `main`
+- **Ports**: Any available port (default: 9090)
+- **Intervals**: Collection interval in seconds (default: 5)
 
 #### Component-Specific Setup
 
-**Host Only:**
+**Host with Dynamic Targets:**
 ```bash
 cd algalon_host
-./setup.sh
+./setup.sh --targets "worker1:9090,worker2:9090,10.0.1.100:9091"
 ```
 
-**Worker Only:**
+**Worker with Full Configuration:**
 ```bash
 cd algalon_worker
-./setup.sh --version v0.9.0 --port 9090
+./setup.sh --version v0.9.0 --port 9090 --interval 5
 ```
 
 ### Manual Setup (Advanced Users)
@@ -107,6 +152,7 @@ cd algalon_worker
 cd algalon_worker
 export ALL_SMI_VERSION=v0.9.0
 export ALL_SMI_PORT=9090
+export ALL_SMI_INTERVAL=5
 docker compose build
 docker compose up -d
 ```
@@ -120,6 +166,7 @@ cp .env.example .env
 # Edit .env file with your preferred settings
 # ALL_SMI_VERSION=v0.9.0
 # ALL_SMI_PORT=9090
+# ALL_SMI_INTERVAL=5
 
 docker compose build
 docker compose up -d
@@ -129,7 +176,13 @@ docker compose up -d
 
 #### For Distributed Setup
 
-1. **Update worker targets** in `algalon_host/node/targets/all-smi-targets.yml`:
+1. **Update worker targets** dynamically:
+   ```bash
+   cd algalon_host
+   ./generate-targets.sh --targets "192.168.1.100:9090,192.168.1.101:9090" --cluster production
+   ```
+
+   Or manually edit `algalon_host/node/targets/all-smi-targets.yml`:
    ```yaml
    - targets:
        - '192.168.1.100:9090'  # Replace with actual worker IPs
@@ -159,13 +212,41 @@ docker compose up -d
 
 #### Access Points
 - **Grafana Dashboard**: http://localhost:3000 (admin/admin)
-- **VictoriaMetrics UI**: http://localhost:8428  
+- **VictoriaMetrics UI**: http://localhost:8428
 - **Worker Metrics**: http://worker-ip:9090/metrics
 
-#### Port Considerations
-- Default port: `9090` (configurable via `--port` option)
-- Ensure firewall allows access on configured ports
-- Update target configurations when using custom ports
+#### Configuration Options
+- **Port**: Default `9090` (configurable via `--port` option)
+- **Interval**: Default `5` seconds (configurable via `--interval` option)
+- **Targets**: Dynamic configuration with environment variables
+- **Firewall**: Ensure configured ports are accessible
+
+## ☁️ Cloud Deployment
+
+### Google Cloud Platform
+
+Deploy Algalon on GCP with full automation:
+
+```bash
+# Quick cloud deployment
+cd terraform/examples/basic
+terraform init
+terraform apply
+```
+
+**Features:**
+- **Auto-scaling**: Managed instance groups with health checks
+- **Cost Optimization**: Preemptible instances and resource scheduling
+- **Security**: VPC isolation and IAM service accounts
+- **Monitoring**: Cloud Logging and Monitoring integration
+
+### Other Cloud Providers
+
+- **AWS**: Adapt Terraform modules for EC2 and Auto Scaling Groups
+- **Azure**: Use Azure Resource Manager templates
+- **Multi-cloud**: Kubernetes deployment with cluster autoscaling
+
+**👉 [See complete cloud deployment guide](CLOUD_DEPLOYMENT.md)**
 
 ## 📊 Dashboard Overview
 
@@ -416,57 +497,88 @@ echo "    - 'new-worker-ip:8080'" >> algalon_host/node/targets/all-smi-targets.y
 ## 🎯 Deployment Examples
 
 ### Scenario 1: Development Setup
+
+**Docker Compose (Local):**
 ```bash
 # Single machine with GPU for testing
 ./setup.sh --single-node
 
-# Custom port to avoid conflicts
-./setup.sh --single-node --port 9091
+# Custom port and interval
+./setup.sh --single-node --port 9091 --interval 10
+```
+
+**Terraform (Cloud):**
+```bash
+cd terraform/examples/basic
+terraform apply -var="deployment_name=algalon-dev" \
+                -var="worker_count=1" \
+                -var="use_preemptible_workers=true"
 ```
 
 ### Scenario 2: Small Production Cluster
+
+**Docker Compose:**
 ```bash
-# Monitoring host (192.168.1.10)
-./setup.sh --host
+# Monitoring host
+./setup.sh --host --targets "192.168.1.20:9090,192.168.1.21:9090"
 
-# GPU workers (192.168.1.20, 192.168.1.21)
-./setup.sh --worker
-
-# Update targets file on host
-echo "- targets:" >> algalon_host/node/targets/all-smi-targets.yml
-echo "    - '192.168.1.20:9090'" >> algalon_host/node/targets/all-smi-targets.yml
-echo "    - '192.168.1.21:9090'" >> algalon_host/node/targets/all-smi-targets.yml
+# GPU workers
+./setup.sh --worker --interval 5
 ```
 
-### Scenario 3: Mixed Version Environment
+**Terraform:**
 ```bash
-# Stable workers with v0.9.0
-./setup.sh --worker --version v0.9.0
-
-# Testing workers with development version
-./setup.sh --worker --version main --port 9091
-
-# Different hardware with older version
-./setup.sh --worker --version v0.8.0 --port 9092
+cd terraform/examples/basic
+terraform apply -var="deployment_name=algalon-prod" \
+                -var="worker_count=3" \
+                -var="gpu_type=nvidia-tesla-v100" \
+                -var="create_static_ip=true"
 ```
 
-### Scenario 4: Multi-Port Environment
-```bash
-# Multiple services on same machine
-./setup.sh --worker --port 9090  # Primary service
-./setup.sh --worker --port 9091  # Secondary service
-./setup.sh --worker --port 9092  # Testing service
+### Scenario 3: Auto-scaling Production
 
-# Update host targets for all ports
+**Terraform with Managed Instance Groups:**
+```bash
+cd terraform/examples/production
+terraform apply -var="enable_autoscaling=true" \
+                -var="autoscaling_min_replicas=2" \
+                -var="autoscaling_max_replicas=10"
+```
+
+### Scenario 4: Multi-Environment Setup
+
+**Development + Staging + Production:**
+```bash
+# Development
+terraform apply -var="environment_name=dev" \
+                -var="use_preemptible_workers=true"
+
+# Staging
+terraform apply -var="environment_name=staging" \
+                -var="worker_count=2"
+
+# Production
+terraform apply -var="environment_name=prod" \
+                -var="worker_count=5" \
+                -var="gpu_type=nvidia-tesla-a100"
 ```
 
 ## 🤝 Contributing
 
 Contributions welcome! Areas for improvement:
-- Additional dashboard templates
-- Alert rule configurations
-- Multi-node deployment guides
-- Custom metric collections
+- Additional dashboard templates and alert rules
+- Cloud provider modules (AWS, Azure, etc.)
+- Kubernetes deployment manifests
+- Custom metric collections and exporters
+- Security enhancements and compliance features
+
+**Testing Infrastructure:**
+- Comprehensive test suite with GitHub Actions
+- Unit, integration, and E2E tests
+- Security scanning and compliance checking
+- Cost estimation and optimization
+
+**👉 [See testing guide](TESTING.md)**
 
 ## 📝 License
 
