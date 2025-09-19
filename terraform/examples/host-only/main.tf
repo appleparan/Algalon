@@ -20,12 +20,12 @@ provider "google" {
 module "network" {
   source = "../../modules/network"
 
-  network_name            = var.network_name
-  region                  = var.region
-  subnet_cidr             = var.subnet_cidr
-  grafana_allowed_ips     = var.grafana_allowed_ips
-  ssh_allowed_ips         = var.ssh_allowed_ips
-  enable_ssh_access       = var.enable_ssh_access
+  network_name                     = var.network_name
+  region                           = var.region
+  subnet_cidr                      = var.subnet_cidr
+  grafana_allowed_ips              = var.grafana_allowed_ips
+  ssh_allowed_ips                  = var.ssh_allowed_ips
+  enable_ssh_access                = var.enable_ssh_access
   enable_external_victoria_metrics = var.enable_external_victoria_metrics
 }
 
@@ -33,14 +33,14 @@ module "network" {
 module "monitoring_host" {
   source = "../../modules/algalon-host"
 
-  instance_name   = "${var.deployment_name}-monitoring"
-  machine_type    = var.host_machine_type
-  zone            = var.zones[0]
-  network_name    = module.network.network_name
-  subnet_name     = module.network.subnet_name
+  instance_name = "${var.deployment_name}-monitoring"
+  machine_type  = var.host_machine_type
+  zone          = var.zones[0]
+  network_name  = module.network.network_name
+  subnet_name   = module.network.subnet_name
 
   # Monitoring configuration - empty targets for host-only deployment
-  worker_targets   = var.worker_targets  # Can be empty or provided manually
+  worker_targets   = var.worker_targets # Can be empty or provided manually
   cluster_name     = var.cluster_name
   environment_name = var.environment_name
 

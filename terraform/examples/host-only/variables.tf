@@ -40,13 +40,13 @@ variable "subnet_cidr" {
 variable "grafana_allowed_ips" {
   description = "List of IP ranges allowed to access Grafana"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Restrict in production
+  default     = ["0.0.0.0/0"] # Restrict in production
 }
 
 variable "ssh_allowed_ips" {
   description = "List of IP ranges allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Restrict in production
+  default     = ["0.0.0.0/0"] # Restrict in production
 }
 
 variable "enable_ssh_access" {
@@ -83,7 +83,7 @@ variable "enable_host_external_ip" {
 variable "create_static_ip" {
   description = "Whether to create a static external IP for the host"
   type        = bool
-  default     = true  # Recommended for production host-only deployments
+  default     = true # Recommended for production host-only deployments
 }
 
 # Worker targets (optional for manual worker registration)
@@ -111,8 +111,8 @@ variable "labels" {
   description = "Labels to apply to resources"
   type        = map(string)
   default = {
-    component   = "algalon-host"
-    deployment  = "host-only"
-    managed-by  = "terraform"
+    component  = "algalon-host"
+    deployment = "host-only"
+    managed-by = "terraform"
   }
 }

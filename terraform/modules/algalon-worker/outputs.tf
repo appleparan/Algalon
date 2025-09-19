@@ -23,7 +23,7 @@ output "metrics_endpoints" {
   value = var.enable_external_ip ? [
     for instance in google_compute_instance.algalon_worker :
     "http://${instance.network_interface[0].access_config[0].nat_ip}:${var.all_smi_port}/metrics"
-  ] : [
+    ] : [
     for instance in google_compute_instance.algalon_worker :
     "http://${instance.network_interface[0].network_ip}:${var.all_smi_port}/metrics"
   ]

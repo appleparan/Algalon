@@ -64,13 +64,13 @@ output "ssh_commands" {
 output "deployment_summary" {
   description = "Summary of the deployed infrastructure"
   value = {
-    deployment_name    = var.deployment_name
-    cluster_name       = var.cluster_name
-    environment        = var.environment_name
-    worker_count       = var.worker_count
-    gpu_type           = var.gpu_type
-    all_smi_version    = var.all_smi_version
-    grafana_url        = module.monitoring_host.grafana_url
-    worker_targets     = module.workers.worker_targets
+    deployment_name = var.deployment_name
+    cluster_name    = var.cluster_name
+    environment     = var.environment_name
+    worker_count    = var.worker_count
+    gpu_type        = var.gpu_type
+    all_smi_version = var.all_smi_version
+    grafana_url     = module.monitoring_host.grafana_url
+    worker_targets  = module.workers.worker_targets
   }
 }
