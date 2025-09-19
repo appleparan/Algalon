@@ -21,6 +21,7 @@ print_usage() {
     echo "Options:"
     echo "  --version <ver>     all-smi version to build (default: v0.9.0)"
     echo "  --port <port>       Port for all-smi API (default: 9090)"
+    echo "  --interval <sec>    Metrics collection interval in seconds (default: 5)"
     echo "  --help              Show this help message"
     echo ""
     echo "Description:"
@@ -33,10 +34,11 @@ print_usage() {
     echo "  - Appropriate container runtime (nvidia-docker2 for NVIDIA)"
     echo ""
     echo "Examples:"
-    echo "  $0                           # Setup with defaults (v0.9.0, port 9090)"
+    echo "  $0                           # Setup with defaults (v0.9.0, port 9090, 5s interval)"
     echo "  $0 --version v0.8.0          # Use specific version"
     echo "  $0 --port 8080               # Use custom port"
-    echo "  $0 --version v0.9.0 --port 9091  # Custom version and port"
+    echo "  $0 --interval 10             # Use 10 second interval"
+    echo "  $0 --version v0.9.0 --port 9091 --interval 3  # Custom version, port, and interval"
     echo ""
 }
 
@@ -71,10 +73,12 @@ check_hardware_runtime() {
 setup_worker() {
     local version="${1:-v0.9.0}"
     local port="${2:-9090}"
-    
+    local interval="${3:-5}"
+
     echo -e "${BLUE}🏗️  Setting up Algalon Worker (Hardware Metrics Exporter)...${NC}"
     echo "   🏷️  all-smi version: ${version}"
     echo "   🔌 Port: ${port}"
+    echo "   ⏱️  Interval: ${interval}s"
     echo ""
     
     check_hardware_runtime
@@ -82,6 +86,7 @@ setup_worker() {
     # Export environment variables for docker-compose
     export ALL_SMI_VERSION="${version}"
     export ALL_SMI_PORT="${port}"
+    export ALL_SMI_INTERVAL="${interval}"
     
     echo "🏗️ Generating Dockerfile for all-smi ${version}..."
     ./generate-dockerfile.sh "${version}" "${port}"
@@ -137,6 +142,7 @@ setup_worker() {
 # Parse command line arguments
 ALL_SMI_VERSION="v0.9.0"
 ALL_SMI_PORT="9090"
+ALL_SMI_INTERVAL="5"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -146,6 +152,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --port)
             ALL_SMI_PORT="$2"
+            shift 2
+            ;;
+        --interval)
+            ALL_SMI_INTERVAL="$2"
             shift 2
             ;;
         --help|-h)
@@ -162,4 +172,4 @@ done
 
 # Main script logic
 check_docker
-setup_worker "${ALL_SMI_VERSION}" "${ALL_SMI_PORT}"
+setup_worker "${ALL_SMI_VERSION}" "${ALL_SMI_PORT}" "${ALL_SMI_INTERVAL}"

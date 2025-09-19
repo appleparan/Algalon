@@ -11,7 +11,7 @@ services:
     runtime: nvidia
     cap_add:
       - SYS_ADMIN
-    command: ["api", "--port", "${ALL_SMI_PORT:-9090}", "--interval", "5", "--processes"]
+    command: ["api", "--port", "${ALL_SMI_PORT:-9090}", "--interval", "${ALL_SMI_INTERVAL:-5}", "--processes"]
     restart: unless-stopped
     networks:
       - monitoring
