@@ -1,0 +1,251 @@
+#cloud-config
+# Algalon Cloud Init for Google Compute Engine (Container-Optimized OS)
+#
+# Usage:
+#   gcloud compute instances create algalon-host \
+#     --image-family cos-stable \
+#     --image-project cos-cloud \
+#     --machine-type n1-standard-2 \
+#     --metadata-from-file user-data=cloud-init-gce.yml \
+#     --metadata="ALGALON_MODE=host,ALGALON_TARGETS=worker1:9090,worker2:9090,10.128.0.100:9090"
+#
+# For worker nodes:
+#   gcloud compute instances create algalon-worker-1 \
+#     --image-family cos-stable \
+#     --image-project cos-cloud \
+#     --machine-type n1-standard-1 \
+#     --accelerator type=nvidia-tesla-t4,count=1 \
+#     --maintenance-policy TERMINATE \
+#     --metadata-from-file user-data=cloud-init-gce.yml \
+#     --metadata="ALGALON_MODE=worker,ALL_SMI_PORT=9090,ALL_SMI_INTERVAL=5"
+
+write_files:
+  - path: /tmp/algalon-setup.sh
+    permissions: 0755
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Colors for output
+      RED='\033[0;31m'
+      GREEN='\033[0;32m'
+      YELLOW='\033[1;33m'
+      BLUE='\033[0;34m'
+      NC='\033[0m'
+
+      log() {
+          echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
+      }
+
+      error() {
+          echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}" >&2
+      }
+
+      success() {
+          echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
+      }
+
+      warn() {
+          echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}"
+      }
+
+      # Get metadata
+      get_metadata() {
+          local key="$1"
+          curl -sf "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$key" \
+               -H "Metadata-Flavor: Google" 2>/dev/null || echo ""
+      }
+
+      # Setup Docker Compose
+      setup_docker_compose() {
+          log "Installing Docker Compose..."
+
+          # Download latest docker-compose
+          COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+          curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+               -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+
+          # Create symlink for 'docker compose' subcommand
+          mkdir -p ~/.docker/cli-plugins/
+          ln -sf /usr/local/bin/docker-compose ~/.docker/cli-plugins/docker-compose
+
+          success "Docker Compose installed: $(/usr/local/bin/docker-compose --version)"
+      }
+
+      # Setup Algalon Host
+      setup_algalon_host() {
+          log "Setting up Algalon Host (Monitoring)..."
+
+          # Get configuration from metadata
+          local targets=$(get_metadata "ALGALON_TARGETS")
+          local cluster=$(get_metadata "ALGALON_CLUSTER")
+          local environment=$(get_metadata "ALGALON_ENVIRONMENT")
+
+          # Set defaults
+          targets="${targets:-localhost:9090}"
+          cluster="${cluster:-production}"
+          environment="${environment:-gpu-cluster}"
+
+          log "Host configuration:"
+          log "  Targets: $targets"
+          log "  Cluster: $cluster"
+          log "  Environment: $environment"
+
+          # Clone repository
+          cd /opt
+          git clone https://github.com/inureyes/Algalon.git
+          cd Algalon/algalon_host
+
+          # Generate targets configuration
+          export ALGALON_TARGETS="$targets"
+          export ALGALON_CLUSTER="$cluster"
+          export ALGALON_ENVIRONMENT="$environment"
+
+          log "Generating targets configuration..."
+          ./generate-targets.sh
+
+          # Start monitoring services
+          log "Starting monitoring services..."
+          /usr/local/bin/docker-compose up -d
+
+          # Wait for services
+          log "Waiting for services to start..."
+          sleep 30
+
+          success "Algalon Host setup complete!"
+          success "Grafana Dashboard: http://$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H 'Metadata-Flavor: Google'):3000"
+          success "Username: admin, Password: admin"
+      }
+
+      # Setup Algalon Worker
+      setup_algalon_worker() {
+          log "Setting up Algalon Worker (Hardware Metrics)..."
+
+          # Get configuration from metadata
+          local version=$(get_metadata "ALL_SMI_VERSION")
+          local port=$(get_metadata "ALL_SMI_PORT")
+          local interval=$(get_metadata "ALL_SMI_INTERVAL")
+
+          # Set defaults
+          version="${version:-v0.9.0}"
+          port="${port:-9090}"
+          interval="${interval:-5}"
+
+          log "Worker configuration:"
+          log "  Version: $version"
+          log "  Port: $port"
+          log "  Interval: ${interval}s"
+
+          # Clone repository
+          cd /opt
+          git clone https://github.com/inureyes/Algalon.git
+          cd Algalon/algalon_worker
+
+          # Setup worker
+          ./setup.sh --version "$version" --port "$port" --interval "$interval"
+
+          success "Algalon Worker setup complete!"
+          success "Metrics endpoint: http://$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H 'Metadata-Flavor: Google'):$port/metrics"
+      }
+
+      # Main setup function
+      main() {
+          log "Starting Algalon Cloud Setup..."
+
+          # Get mode from metadata
+          local mode=$(get_metadata "ALGALON_MODE")
+          mode="${mode:-host}"
+
+          log "Algalon mode: $mode"
+
+          # Install Docker Compose
+          setup_docker_compose
+
+          # Setup based on mode
+          case "$mode" in
+              "host")
+                  setup_algalon_host
+                  ;;
+              "worker")
+                  setup_algalon_worker
+                  ;;
+              *)
+                  error "Unknown ALGALON_MODE: $mode. Use 'host' or 'worker'"
+                  exit 1
+                  ;;
+          esac
+
+          success "Algalon setup completed successfully!"
+      }
+
+      # Run main function
+      main "$@"
+
+runcmd:
+  # Wait for Docker to be ready
+  - timeout 300 bash -c 'until docker info; do sleep 5; done'
+
+  # Run Algalon setup
+  - /tmp/algalon-setup.sh 2>&1 | tee /var/log/algalon-setup.log
+
+# Configure systemd service for monitoring setup logs
+write_files:
+  - path: /etc/systemd/system/algalon-monitor.service
+    content: |
+      [Unit]
+      Description=Algalon Setup Monitor
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c 'tail -f /var/log/algalon-setup.log'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /tmp/setup-complete-check.sh
+    permissions: 0755
+    content: |
+      #!/bin/bash
+      # Check setup completion and log status
+
+      check_services() {
+          echo "=== Algalon Service Status ==="
+          echo "Setup log location: /var/log/algalon-setup.log"
+          echo ""
+
+          echo "Docker containers:"
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          echo ""
+
+          echo "Service endpoints:"
+          EXTERNAL_IP=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H 'Metadata-Flavor: Google')
+          echo "External IP: $EXTERNAL_IP"
+          echo ""
+
+          if docker ps | grep -q grafana; then
+              echo "🎯 Grafana Dashboard: http://$EXTERNAL_IP:3000"
+              echo "   Username: admin"
+              echo "   Password: admin"
+          fi
+
+          if docker ps | grep -q algalon-all-smi; then
+              local port=$(docker ps --filter name=algalon-all-smi --format "{{.Ports}}" | grep -o '[0-9]*:9[0-9]*' | cut -d: -f1)
+              echo "📊 Metrics Endpoint: http://$EXTERNAL_IP:${port:-9090}/metrics"
+          fi
+
+          echo ""
+          echo "To view setup logs: sudo journalctl -u google-startup-scripts.service"
+          echo "To view live setup progress: tail -f /var/log/algalon-setup.log"
+      }
+
+      # Wait a bit for services to settle, then check
+      sleep 60
+      check_services
+
+# Enable and start monitoring service
+runcmd:
+  - systemctl enable algalon-monitor.service
+  - nohup /tmp/setup-complete-check.sh > /var/log/algalon-status.log 2>&1 &

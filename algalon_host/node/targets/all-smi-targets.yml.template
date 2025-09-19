@@ -1,0 +1,39 @@
+# targets/all-smi-targets.yml
+# Configuration for all-smi GPU/CPU monitoring worker nodes
+# This file is auto-generated from environment variables
+# To modify, update ALGALON_TARGETS environment variable and regenerate
+
+{{TARGETS_CONFIG}}
+
+# Multi-cluster configuration example
+# - targets:
+#     - '10.0.2.100:9090'  # gpu-worker-04
+#     - '10.0.2.101:9090'  # gpu-worker-05
+#   labels:
+#     job: 'all-smi'
+#     cluster: 'staging'
+#     datacenter: 'dc2'
+#     monitoring_type: 'comprehensive'
+
+# Using hostnames instead of IPs
+# - targets:
+#     - 'gpu-node-1.example.com:9090'
+#     - 'gpu-node-2.example.com:9090'
+#     - 'gpu-node-3.example.com:9090'
+#   labels:
+#     job: 'all-smi'
+#     cluster: 'production'
+#     domain: 'example.com'
+#     monitoring_type: 'comprehensive'
+
+# Platform-specific labeling examples
+# - targets: ['10.0.3.100:9090']  # NVIDIA nodes
+#   labels:
+#     job: 'all-smi'
+#     platform: 'nvidia'
+#     gpu_type: 'cuda'
+# - targets: ['10.0.3.200:9090']  # Apple Silicon nodes
+#   labels:
+#     job: 'all-smi'
+#     platform: 'apple'
+#     gpu_type: 'metal'
