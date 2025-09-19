@@ -54,6 +54,12 @@ write_files:
           local cluster="${algalon_cluster}"
           local environment="${algalon_environment}"
 
+          # Set default targets if empty (host-only deployment)
+          if [ -z "$targets" ]; then
+              targets="localhost:9090"
+              log "No worker targets specified - using placeholder for host-only deployment"
+          fi
+
           log "Host configuration:"
           log "  Targets: $targets"
           log "  Cluster: $cluster"

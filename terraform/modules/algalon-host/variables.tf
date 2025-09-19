@@ -33,9 +33,9 @@ variable "subnet_name" {
 }
 
 variable "worker_targets" {
-  description = "Comma-separated list of worker targets (host:port)"
+  description = "Comma-separated list of worker targets (host:port). Leave empty for host-only deployment"
   type        = string
-  default     = "localhost:9090"
+  default     = ""
 }
 
 variable "cluster_name" {
