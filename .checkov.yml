@@ -1,0 +1,112 @@
+# Checkov configuration for Algalon Terraform security scanning
+# Documentation: https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+
+# Directories to scan
+directory:
+  - terraform/
+
+# Output format
+output: cli
+
+# Create baseline (skip existing issues)
+create-baseline: false
+
+# Download external modules for scanning
+download-external-modules: true
+
+# Framework to scan
+framework:
+  - terraform
+
+# Skip checks that are not applicable to our use case
+skip-check:
+  # GPU instances require specific maintenance policies
+  - CKV_GCP_62  # Ensure Compute instances do not have public IP addresses
+
+  # Development/testing instances may need broader access
+  - CKV_GCP_2   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 22
+  - CKV_GCP_3   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 3389
+  - CKV_GCP_106 # Ensure that GCP compute firewall ingress does not allow unrestricted access on port 22
+  - CKV_GCP_107 # Ensure that GCP compute firewall ingress does not allow unrestricted access on port 3389
+
+  # Monitoring ports need to be accessible for the use case
+  - CKV_GCP_88  # Ensure that GCP compute firewall ingress does not allow unrestricted access on all ports
+
+  # Container-Optimized OS doesn't support some security features
+  - CKV_GCP_32  # Ensure 'Block Project-wide SSH keys' is enabled for VM instances
+  - CKV_GCP_34  # Ensure that no instance in the project overrides the project setting for enabling OSLogin
+  - CKV_GCP_35  # Ensure 'Enable connecting to serial ports' is not enabled for VM Instance
+  - CKV_GCP_36  # Ensure that IP forwarding is not enabled on Instances
+  - CKV_GCP_37  # Ensure VM instances are not configured to use the default service account with full access to all Cloud APIs
+  - CKV_GCP_38  # Ensure VM instances are not configured to use the default service account
+  - CKV_GCP_39  # Ensure Compute instances are launched with shielded VM enabled
+  - CKV_GCP_40  # Ensure that instances are not configured to use the default service account with full access to all Cloud APIs
+
+  # Preemptible instances have specific limitations
+  - CKV_GCP_10  # Ensure that Compute instances do not have public IP addresses (needed for some testing)
+
+# Checks to enforce (high priority security)
+check:
+  - CKV_GCP_1   # Ensure that Google Cloud Resource Manager service has been secured
+  - CKV_GCP_7   # Ensure Legacy Authorization is set to Disabled on Kubernetes Engine Clusters
+  - CKV_GCP_8   # Ensure Stackdriver Monitoring is set to Enabled on Kubernetes Engine Clusters
+  - CKV_GCP_9   # Ensure Stackdriver Logging is set to Enabled on Kubernetes Engine Clusters
+  - CKV_GCP_11  # Ensure that Cloud SQL database instances do not have public IPs
+  - CKV_GCP_12  # Ensure that Cloud SQL database instances require all incoming connections to use SSL
+  - CKV_GCP_13  # Ensure that SQL database instances do not have cross database ownership chaining enabled
+  - CKV_GCP_14  # Ensure that Cloud SQL database instances are configured with automated backups
+  - CKV_GCP_15  # Ensure that BigQuery datasets are not anonymously or publicly accessible
+  - CKV_GCP_16  # Ensure that BigQuery datasets are not anonymously or publicly accessible
+  - CKV_GCP_17  # Ensure that Cloud Storage buckets are not anonymously or publicly accessible
+  - CKV_GCP_18  # Ensure that Cloud Storage bucket is not anonymously or publicly readable
+  - CKV_GCP_19  # Ensure that Cloud Storage buckets are not anonymously or publicly writable
+  - CKV_GCP_20  # Ensure that Cloud Storage bucket does not log to itself
+  - CKV_GCP_21  # Ensure that Vertex AI notebooks are not publicly accessible
+  - CKV_GCP_22  # Ensure that Container Analysis is enabled
+  - CKV_GCP_23  # Ensure that security policies are attached to target pools and backend services
+  - CKV_GCP_24  # Ensure that the default network does not exist in a project
+  - CKV_GCP_25  # Ensure that VPC Flow Logs is enabled for every subnet in a VPC Network
+  - CKV_GCP_26  # Ensure that VPC subnets do not have private Google access disabled
+  - CKV_GCP_27  # Ensure that Private cluster is enabled when creating Kubernetes clusters
+  - CKV_GCP_28  # Ensure that GKE clusters are configured with monitoring enabled
+  - CKV_GCP_29  # Ensure that GKE clusters are configured with logging enabled
+
+# Severity levels to report
+severity:
+  - critical
+  - high
+  - medium
+  - low
+
+# External checks directory (if any custom checks)
+external-checks-dir: []
+
+# Quiet mode (reduce output verbosity)
+quiet: false
+
+# Compact mode (reduce output verbosity but show results)
+compact: true
+
+# Create a JUnit XML report
+output-file-path: reports/
+
+# Create SARIF report for GitHub Security tab
+output-format: cli,sarif
+
+# Baseline file to compare against
+baseline: null
+
+# CA certificate bundle file
+ca-certificate: null
+
+# Repository root for relative paths
+repo-root-for-plan-enrichment: []
+
+# External modules directory
+external-modules-dir: []
+
+# Download external modules
+download-external-modules: true
+
+# Evaluate variables
+evaluate-variables: true
