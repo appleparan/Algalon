@@ -1,0 +1,87 @@
+# Basic Algalon deployment example
+# Creates a simple setup with one monitoring host and two worker nodes
+
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+# Create network infrastructure
+module "network" {
+  source = "../../modules/network"
+
+  network_name            = var.network_name
+  region                  = var.region
+  subnet_cidr             = var.subnet_cidr
+  grafana_allowed_ips     = var.grafana_allowed_ips
+  ssh_allowed_ips         = var.ssh_allowed_ips
+  enable_ssh_access       = var.enable_ssh_access
+  enable_external_victoria_metrics = var.enable_external_victoria_metrics
+}
+
+# Create worker instances
+module "workers" {
+  source = "../../modules/algalon-worker"
+
+  instance_name_prefix = "${var.deployment_name}-worker"
+  instance_count       = var.worker_count
+  machine_type         = var.worker_machine_type
+  zones                = var.zones
+  network_name         = module.network.network_name
+  subnet_name          = module.network.subnet_name
+
+  # GPU configuration
+  gpu_type  = var.gpu_type
+  gpu_count = var.gpu_count
+
+  # all-smi configuration
+  all_smi_version  = var.all_smi_version
+  all_smi_port     = var.all_smi_port
+  all_smi_interval = var.all_smi_interval
+
+  # Instance configuration
+  boot_disk_size      = var.worker_boot_disk_size
+  enable_external_ip  = var.enable_worker_external_ip
+  preemptible         = var.use_preemptible_workers
+
+  # Labels
+  cluster_name     = var.cluster_name
+  environment_name = var.environment_name
+  labels           = var.labels
+}
+
+# Create monitoring host
+module "monitoring_host" {
+  source = "../../modules/algalon-host"
+
+  instance_name   = "${var.deployment_name}-monitoring"
+  machine_type    = var.host_machine_type
+  zone            = var.zones[0]
+  network_name    = module.network.network_name
+  subnet_name     = module.network.subnet_name
+
+  # Monitoring configuration
+  worker_targets   = module.workers.worker_targets
+  cluster_name     = var.cluster_name
+  environment_name = var.environment_name
+
+  # Instance configuration
+  boot_disk_size     = var.host_boot_disk_size
+  enable_external_ip = var.enable_host_external_ip
+  create_static_ip   = var.create_static_ip
+
+  # Labels
+  labels = var.labels
+
+  depends_on = [module.workers]
+}

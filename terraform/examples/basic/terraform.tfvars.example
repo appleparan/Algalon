@@ -1,0 +1,48 @@
+# Example Terraform variables for basic Algalon deployment
+# Copy this file to terraform.tfvars and modify as needed
+
+# Required: GCP Project ID
+project_id = "your-gcp-project-id"
+
+# Deployment configuration
+deployment_name  = "algalon-demo"
+cluster_name     = "ml-training"
+environment_name = "development"
+
+# Region and zones
+region = "us-central1"
+zones  = ["us-central1-a", "us-central1-b"]
+
+# Network security (restrict access as needed)
+grafana_allowed_ips = ["0.0.0.0/0"]  # Consider restricting to your IP
+ssh_allowed_ips     = ["0.0.0.0/0"]  # Consider restricting to your IP
+
+# Worker configuration
+worker_count        = 3
+worker_machine_type = "n1-standard-1"
+gpu_type            = "nvidia-tesla-t4"  # or "nvidia-tesla-v100"
+gpu_count           = 1
+
+# Use preemptible instances for cost savings (not recommended for production)
+use_preemptible_workers = true
+
+# all-smi configuration
+all_smi_version  = "v0.9.0"
+all_smi_port     = 9090
+all_smi_interval = 5
+
+# Monitoring host configuration
+host_machine_type = "n1-standard-2"
+create_static_ip  = false  # Set to true for production
+
+# Enable external IPs
+enable_host_external_ip   = true
+enable_worker_external_ip = false  # Usually not needed
+
+# Custom labels
+labels = {
+  project     = "algalon"
+  managed_by  = "terraform"
+  team        = "ml-ops"
+  cost_center = "research"
+}
