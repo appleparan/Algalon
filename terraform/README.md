@@ -84,7 +84,7 @@ gcloud services enable compute.googleapis.com
 
 ```bash
 # Clone and navigate
-git clone https://github.com/inureyes/Algalon.git
+git clone https://github.com/appleparan/Algalon.git
 cd Algalon/terraform/examples/basic
 
 # Configure
@@ -301,6 +301,6 @@ labels = {
 
 ## Support
 
-- [GitHub Issues](https://github.com/inureyes/Algalon/issues)
+- [GitHub Issues](https://github.com/appleparan/Algalon/issues)
 - [Main Documentation](../README.md)
 - [Cloud Deployment Guide](../CLOUD_DEPLOYMENT.md)

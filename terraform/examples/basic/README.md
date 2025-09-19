@@ -22,7 +22,7 @@ This example demonstrates a basic Algalon deployment with:
 
 ```bash
 # Clone the repository
-git clone https://github.com/inureyes/Algalon.git
+git clone https://github.com/appleparan/Algalon.git
 cd Algalon/terraform/examples/basic
 
 # Copy and customize variables
@@ -193,6 +193,6 @@ gcloud compute ssh MONITORING_HOST --zone=ZONE --command="curl -f WORKER_IP:9090
 
 ## Support
 
-- [GitHub Issues](https://github.com/inureyes/Algalon/issues)
+- [GitHub Issues](https://github.com/appleparan/Algalon/issues)
 - [Documentation](../../../README.md)
 - [Cloud Deployment Guide](../../../CLOUD_DEPLOYMENT.md)

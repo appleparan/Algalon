@@ -61,7 +61,7 @@ write_files:
 
           # Clone repository
           cd /opt
-          git clone https://github.com/inureyes/Algalon.git
+          git clone https://github.com/appleparan/Algalon.git
           cd Algalon/algalon_worker
 
           # Setup worker

@@ -251,7 +251,7 @@ INFRACOST_API_KEY: "ico-xxx..."
 
 ```bash
 # Clone repository
-git clone https://github.com/inureyes/Algalon.git
+git clone https://github.com/appleparan/Algalon.git
 cd Algalon
 
 # Install tools
@@ -546,6 +546,6 @@ checkov --config-file .checkov.yml --dry-run
 
 ## Support
 
-- [GitHub Issues](https://github.com/inureyes/Algalon/issues)
-- [Discussions](https://github.com/inureyes/Algalon/discussions)
+- [GitHub Issues](https://github.com/appleparan/Algalon/issues)
+- [Discussions](https://github.com/appleparan/Algalon/discussions)
 - [Contributing Guide](CONTRIBUTING.md)

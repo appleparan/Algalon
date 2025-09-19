@@ -62,7 +62,7 @@ Choose your deployment method based on your needs:
 
 ```bash
 # Clone repository
-git clone https://github.com/inureyes/Algalon.git
+git clone https://github.com/appleparan/Algalon.git
 cd Algalon/terraform/examples/basic
 
 # Configure deployment
