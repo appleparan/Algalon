@@ -27,10 +27,10 @@ on:
           - all
 
 env:
-  TF_VERSION: "1.6.0"
-  TERRAFORM_DOCS_VERSION: "0.16.0"
-  TFLINT_VERSION: "v0.48.0"
-  CHECKOV_VERSION: "3.0.0"
+  TF_VERSION: "1.13.3"
+  TERRAFORM_DOCS_VERSION: "0.20.0"
+  TFLINT_VERSION: "v0.59.1"
+  CHECKOV_VERSION: "3.2.471"
 
 jobs:
   terraform-validate:
@@ -88,9 +88,10 @@ jobs:
       - name: Run TFLint
         run: |
           find terraform/ -name "*.tf" -type f -exec dirname {} \; | sort -u | while read dir; do
-            echo "Linting $dir"
-            tflint "$dir"
+              echo "Linting $dir"
+              tflint --chdir="$dir"
           done
+
 
   terraform-security:
     name: 🔒 Security Scanning

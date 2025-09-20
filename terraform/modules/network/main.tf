@@ -1,5 +1,14 @@
 # Network module for Algalon infrastructure
 # Creates VPC, subnets, and firewall rules
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
 
 resource "google_compute_network" "algalon_network" {
   name                    = var.network_name

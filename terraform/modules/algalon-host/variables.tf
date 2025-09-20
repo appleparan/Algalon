@@ -32,6 +32,18 @@ variable "subnet_name" {
   type        = string
 }
 
+variable "enable_external_ip" {
+  description = "Enable external IP for the instance"
+  type        = bool
+  default     = true
+}
+
+variable "reserve_static_ip" {
+  description = "Reserve a static IP address (optional, for persistent IP)"
+  type        = bool
+  default     = false
+}
+
 variable "worker_targets" {
   description = "Comma-separated list of worker targets (host:port). Leave empty for host-only deployment"
   type        = string

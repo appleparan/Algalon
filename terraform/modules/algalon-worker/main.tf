@@ -1,6 +1,16 @@
 # Algalon Worker module
 # Creates worker instances with GPU support for hardware metrics collection
 
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
 # Data source for Container-Optimized OS image
 data "google_compute_image" "cos_image" {
   family  = "cos-stable"
@@ -14,6 +24,35 @@ locals {
     all_smi_port     = var.all_smi_port
     all_smi_interval = var.all_smi_interval
   })
+
+  common_metadata = {
+    user-data                 = local.cloud_init_config
+    google-logging-enabled    = "true"
+    google-monitoring-enabled = "true"
+  }
+
+  common_labels = merge(var.labels, {
+    component   = "algalon-worker"
+    environment = var.environment_name
+    cluster     = var.cluster_name
+  })
+
+  common_tags = ["algalon-worker"]
+
+  network_interface_config = {
+    network    = var.network_name
+    subnetwork = var.subnet_name
+  }
+
+  scheduling_config = {
+    on_host_maintenance = var.gpu_type != null ? "TERMINATE" : "MIGRATE"
+    preemptible         = var.preemptible
+  }
+
+  service_account_config = {
+    email  = var.service_account_email
+    scopes = var.service_account_scopes
+  }
 }
 
 resource "google_compute_instance" "algalon_worker" {
@@ -57,13 +96,8 @@ resource "google_compute_instance" "algalon_worker" {
     }
   }
 
-  metadata = {
-    user-data                 = local.cloud_init_config
-    google-logging-enabled    = "true"
-    google-monitoring-enabled = "true"
-  }
-
-  tags = ["algalon-worker"]
+  metadata = local.common_metadata
+  tags     = local.common_tags
 
   labels = merge(var.labels, {
     component    = "algalon-worker"
@@ -82,7 +116,7 @@ resource "google_compute_instance" "algalon_worker" {
   }
 }
 
-# Optional: Create managed instance group for auto-scaling
+# Instance template for managed instance group
 resource "google_compute_instance_template" "algalon_worker_template" {
   count        = var.create_instance_group ? 1 : 0
   name_prefix  = "${var.instance_name_prefix}-template-"
@@ -96,7 +130,7 @@ resource "google_compute_instance_template" "algalon_worker_template" {
     type         = var.boot_disk_type
   }
 
-  # GPU configuration for template
+  # GPU configuration
   dynamic "guest_accelerator" {
     for_each = var.gpu_type != null ? [1] : []
     content {
@@ -106,13 +140,13 @@ resource "google_compute_instance_template" "algalon_worker_template" {
   }
 
   scheduling {
-    on_host_maintenance = var.gpu_type != null ? "TERMINATE" : "MIGRATE"
-    preemptible         = var.preemptible
+    on_host_maintenance = local.scheduling_config.on_host_maintenance
+    preemptible         = local.scheduling_config.preemptible
   }
 
   network_interface {
-    network    = var.network_name
-    subnetwork = var.subnet_name
+    network    = local.network_interface_config.network
+    subnetwork = local.network_interface_config.subnetwork
 
     dynamic "access_config" {
       for_each = var.enable_external_ip ? [1] : []
@@ -122,23 +156,13 @@ resource "google_compute_instance_template" "algalon_worker_template" {
     }
   }
 
-  metadata = {
-    user-data                 = local.cloud_init_config
-    google-logging-enabled    = "true"
-    google-monitoring-enabled = "true"
-  }
-
-  tags = ["algalon-worker"]
-
-  labels = merge(var.labels, {
-    component   = "algalon-worker"
-    environment = var.environment_name
-    cluster     = var.cluster_name
-  })
+  metadata = local.common_metadata
+  tags     = local.common_tags
+  labels   = local.common_labels
 
   service_account {
-    email  = var.service_account_email
-    scopes = var.service_account_scopes
+    email  = local.service_account_config.email
+    scopes = local.service_account_config.scopes
   }
 
   lifecycle {
@@ -146,6 +170,7 @@ resource "google_compute_instance_template" "algalon_worker_template" {
   }
 }
 
+# Managed instance group
 resource "google_compute_instance_group_manager" "algalon_worker_group" {
   count              = var.create_instance_group ? 1 : 0
   name               = "${var.instance_name_prefix}-group"
