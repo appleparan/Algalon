@@ -33,7 +33,7 @@ all_smi_interval = 5
 
 # Monitoring host configuration
 host_machine_type = "n1-standard-2"
-create_static_ip  = false  # Set to true for production
+reserve_static_ip = false  # Set to true for production
 
 # Enable external IPs
 enable_host_external_ip   = true

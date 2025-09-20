@@ -151,8 +151,8 @@ variable "enable_host_external_ip" {
   default     = true
 }
 
-variable "create_static_ip" {
-  description = "Create static IP for monitoring host"
+variable "reserve_static_ip" {
+  description = "Reserve static IP for monitoring host"
   type        = bool
   default     = false
 }

@@ -21,7 +21,7 @@ ssh_allowed_ips     = ["YOUR_IP/32"]  # Replace with your IP
 host_machine_type      = "n1-standard-2"
 host_boot_disk_size    = 50
 enable_host_external_ip = true
-create_static_ip       = true  # Recommended for stable monitoring host
+reserve_static_ip      = true  # Recommended for stable monitoring host
 
 # Cluster labeling
 cluster_name     = "production"

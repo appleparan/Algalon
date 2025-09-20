@@ -80,8 +80,8 @@ variable "enable_host_external_ip" {
   default     = true
 }
 
-variable "create_static_ip" {
-  description = "Whether to create a static external IP for the host"
+variable "reserve_static_ip" {
+  description = "Whether to reserve a static external IP for the host"
   type        = bool
   default     = true # Recommended for production host-only deployments
 }
