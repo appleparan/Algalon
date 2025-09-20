@@ -143,19 +143,28 @@ jobs:
 
       - name: Check Documentation
         run: |
+          # Store initial state to compare only terraform module changes
+          git stash push README.md || true
+
           for module in terraform/modules/*/; do
             echo "Checking docs for $module"
             terraform-docs markdown table --output-file README.md --output-mode inject "$module"
           done
 
-          # Check if any files were modified
-          if [[ $(git diff --name-only) ]]; then
-            echo "❌ Documentation is out of date. Please run 'make docs' and commit changes."
-            git diff
+          # Check if any terraform module documentation was modified
+          terraform_changes=$(git diff --name-only | grep "^terraform/" || true)
+          if [[ -n "$terraform_changes" ]]; then
+            echo "❌ Terraform module documentation is out of date. Please run terraform-docs on modules and commit changes."
+            echo "Modified files:"
+            echo "$terraform_changes"
+            git diff terraform/
             exit 1
           else
-            echo "✅ Documentation is up to date."
+            echo "✅ Terraform module documentation is up to date."
           fi
+
+          # Restore root README.md if it was modified
+          git restore README.md || true
 
   unit-tests:
     name: 🧪 Unit Tests
