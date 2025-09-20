@@ -114,7 +114,8 @@ jobs:
           mkdir -p reports
           checkov --framework terraform \
                   --directory terraform/ \
-                  -o cli,sarif \
+                  --output cli \
+                  --output sarif \
                   --output-file-path reports/ \
                   --skip-check CKV_GCP_30,CKV_GCP_35,CKV_GCP_36 \
                   --soft-fail
