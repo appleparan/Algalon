@@ -45,9 +45,9 @@ module "monitoring_host" {
   environment_name = var.environment_name
 
   # Instance configuration
-  boot_disk_size      = var.host_boot_disk_size
-  enable_external_ip  = var.enable_host_external_ip
-  reserve_static_ip   = var.reserve_static_ip
+  boot_disk_size     = var.host_boot_disk_size
+  enable_external_ip = var.enable_host_external_ip
+  reserve_static_ip  = var.reserve_static_ip
 
   # Labels
   labels = var.labels

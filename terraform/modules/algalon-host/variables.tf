@@ -68,12 +68,6 @@ variable "enable_external_ip" {
   default     = true
 }
 
-variable "create_static_ip" {
-  description = "Whether to create a static external IP"
-  type        = bool
-  default     = false
-}
-
 variable "reserve_static_ip" {
   description = "Reserve a static IP address (optional, for persistent IP)"
   type        = bool
