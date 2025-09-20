@@ -104,7 +104,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Install Checkov
         run: pip install checkov==${{ env.CHECKOV_VERSION }}
@@ -114,8 +114,7 @@ jobs:
           mkdir -p reports
           checkov --framework terraform \
                   --directory terraform/ \
-                  --output cli \
-                  --output sarif \
+                  -o sarif \
                   --output-file-path reports/ \
                   --skip-check CKV_GCP_30,CKV_GCP_35,CKV_GCP_36 \
                   --soft-fail
