@@ -307,27 +307,28 @@ jobs:
           path: /tmp/infracost.json
           behavior: update
 
-  notify-slack:
-    name: 📢 Slack Notification
-    runs-on: ubuntu-latest
-    needs: [terraform-validate, terraform-lint, terraform-security, unit-tests]
-    if: always() && github.ref == 'refs/heads/main'
+  # notify-slack:
+  #   name: 📢 Slack Notification
+  #   runs-on: ubuntu-latest
+  #   needs: [terraform-validate, terraform-lint, terraform-security, unit-tests]
+  #   if: always() && github.ref == 'refs/heads/main'
 
-    steps:
-      - name: Notify Slack on success
-        if: needs.terraform-validate.result == 'success' && needs.terraform-lint.result == 'success' && needs.terraform-security.result == 'success' && needs.unit-tests.result == 'success'
-        uses: 8398a7/action-slack@v3
-        with:
-          status: success
-          text: "✅ Algalon Terraform tests passed successfully!"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  #   steps:
+  #     - name: Notify Slack on success
+  #       if: needs.terraform-validate.result == 'success' && needs.terraform-lint.result == 'success' && needs.terraform-security.result == 'success' && needs.unit-tests.result == 'success'
+  #       uses: 8398a7/action-slack@v3
+  #       with:
+  #         status: success
+  #         text: "✅ Algalon Terraform tests passed successfully!"
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Notify Slack on failure
-        if: needs.terraform-validate.result == 'failure' || needs.terraform-lint.result == 'failure' || needs.terraform-security.result == 'failure' || needs.unit-tests.result == 'failure'
-        uses: 8398a7/action-slack@v3
-        with:
-          status: failure
-          text: "❌ Algalon Terraform tests failed!"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  #     - name: Notify Slack on failure
+  #       if: needs.terraform-validate.result == 'failure' || needs.terraform-lint.result == 'failure' || needs.terraform-security.result == 'failure' || needs.unit-tests.result == 'failure'
+  #       uses: 8398a7/action-slack@v3
+  #       with:
+  #         status: failure
+  #         text: "❌ Algalon Terraform tests failed!"
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  
