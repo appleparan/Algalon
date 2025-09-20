@@ -9,3 +9,13 @@ algalon_worker/.env
 
 # Logs
 *.log
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+.terraformrc
+terraform.rc
