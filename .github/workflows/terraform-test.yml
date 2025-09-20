@@ -30,7 +30,7 @@ env:
   TF_VERSION: "1.13.3"
   TERRAFORM_DOCS_VERSION: "0.20.0"
   TFLINT_VERSION: "v0.59.1"
-  CHECKOV_VERSION: "3.2.300"
+  CHECKOV_VERSION: "3.2.471"
 
 jobs:
   terraform-validate:
@@ -114,8 +114,7 @@ jobs:
           mkdir -p reports
           checkov --framework terraform \
                   --directory terraform/ \
-                  --output cli \
-                  --output sarif \
+                  -o cli,sarif \
                   --output-file-path reports/ \
                   --skip-check CKV_GCP_30,CKV_GCP_35,CKV_GCP_36 \
                   --soft-fail
