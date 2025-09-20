@@ -54,6 +54,7 @@ No modules.
 | <a name="output_instance_name"></a> [instance\_name](#output\_instance\_name) | Name of the created monitoring host instance |
 | <a name="output_instance_self_link"></a> [instance\_self\_link](#output\_instance\_self\_link) | Self link of the created monitoring host instance |
 | <a name="output_internal_ip"></a> [internal\_ip](#output\_internal\_ip) | Internal IP address of the monitoring host |
+| <a name="output_ssh_command"></a> [ssh\_command](#output\_ssh\_command) | Command to SSH into the monitoring host |
 | <a name="output_static_ip_address"></a> [static\_ip\_address](#output\_static\_ip\_address) | Static IP address if created |
 | <a name="output_victoria_metrics_url"></a> [victoria\_metrics\_url](#output\_victoria\_metrics\_url) | URL for VictoriaMetrics |
 <!-- END_TF_DOCS -->
