@@ -40,13 +40,13 @@ variable "subnet_cidr" {
 variable "grafana_allowed_ips" {
   description = "List of IP ranges allowed to access Grafana"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Restrict in production
+  default     = ["35.235.240.0/20"] # Restrict in production
 }
 
 variable "ssh_allowed_ips" {
   description = "List of IP ranges allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Restrict in production
+  default     = ["35.235.240.0/20"] # Restrict in production
 }
 
 variable "enable_ssh_access" {
@@ -65,7 +65,7 @@ variable "enable_external_victoria_metrics" {
 variable "host_machine_type" {
   description = "Machine type for the monitoring host"
   type        = string
-  default     = "n1-standard-2"
+  default     = "c4a-standard-8"
 }
 
 variable "host_boot_disk_size" {

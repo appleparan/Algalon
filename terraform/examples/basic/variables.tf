@@ -46,16 +46,17 @@ variable "subnet_cidr" {
   default     = "10.1.0.0/16"
 }
 
+# Security configuration
 variable "grafana_allowed_ips" {
-  description = "IP ranges allowed to access Grafana"
+  description = "List of IP ranges allowed to access Grafana"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["35.235.240.0/20"] # Restrict in production
 }
 
 variable "ssh_allowed_ips" {
-  description = "IP ranges allowed SSH access"
+  description = "List of IP ranges allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["35.235.240.0/20"] # Restrict in production
 }
 
 variable "enable_ssh_access" {

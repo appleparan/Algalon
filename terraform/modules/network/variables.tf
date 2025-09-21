@@ -19,19 +19,40 @@ variable "subnet_cidr" {
 variable "grafana_allowed_ips" {
   description = "List of IP ranges allowed to access Grafana"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["35.235.240.0/20"]
+  validation {
+    condition = alltrue([
+      for cidr in var.ssh_allowed_ips :
+      !(cidr == "0.0.0.0/0" || cidr == "::/0")
+    ])
+    error_message = "grafana_allowed_ips must not include 0.0.0.0/0 or ::/0."
+  }
 }
 
 variable "victoria_metrics_allowed_ips" {
   description = "List of IP ranges allowed to access VictoriaMetrics"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["35.235.240.0/20"]
+  validation {
+    condition = alltrue([
+      for cidr in var.ssh_allowed_ips :
+      !(cidr == "0.0.0.0/0" || cidr == "::/0")
+    ])
+    error_message = "victoria_metrics_allowed_ips must not include 0.0.0.0/0 or ::/0."
+  }
 }
 
 variable "ssh_allowed_ips" {
   description = "List of IP ranges allowed SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["35.235.240.0/20"]
+  validation {
+    condition = alltrue([
+      for cidr in var.ssh_allowed_ips :
+      !(cidr == "0.0.0.0/0" || cidr == "::/0")
+    ])
+    error_message = "ssh_allowed_ips must not include 0.0.0.0/0 or ::/0."
+  }
 }
 
 variable "worker_ports" {

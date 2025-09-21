@@ -7,7 +7,7 @@ variable "instance_name" {
 variable "machine_type" {
   description = "Machine type for the monitoring host"
   type        = string
-  default     = "n1-standard-2"
+  default     = "c4a-standard-8"
 }
 
 variable "zone" {
@@ -47,7 +47,7 @@ variable "cluster_name" {
 variable "environment_name" {
   description = "Environment name for labeling"
   type        = string
-  default     = "gpu-cluster"
+  default     = "gpu-monitoring-cluster"
 }
 
 variable "boot_disk_size" {
@@ -59,7 +59,7 @@ variable "boot_disk_size" {
 variable "boot_disk_type" {
   description = "Type of the boot disk"
   type        = string
-  default     = "pd-standard"
+  default     = "hyperdisk-balanced"
 }
 
 variable "enable_external_ip" {

@@ -6,14 +6,14 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "~> 7.3"
     }
   }
 }
 
 # Data source for Container-Optimized OS image
 data "google_compute_image" "cos_image" {
-  family  = "cos-stable"
+  family  = "cos-arm64-121-lts"
   project = "cos-cloud"
 }
 
@@ -23,6 +23,7 @@ resource "google_compute_address" "algalon_host_ip" {
   name   = "${var.instance_name}-ip"
   region = var.region
 }
+
 # Cloud-init configuration for monitoring host
 locals {
   cloud_init_config = templatefile("${path.module}/cloud-init-host.yml.tpl", {
@@ -33,6 +34,7 @@ locals {
 }
 
 resource "google_compute_instance" "algalon_host" {
+#   count = length(data.google_compute_zones.available.names)
   name         = var.instance_name
   machine_type = var.machine_type
   zone         = var.zone
@@ -63,6 +65,7 @@ resource "google_compute_instance" "algalon_host" {
     user-data                 = local.cloud_init_config
     google-logging-enabled    = "true"
     google-monitoring-enabled = "true"
+    block-project-ssh-keys = true
   }
 
   tags = concat(

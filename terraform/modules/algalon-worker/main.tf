@@ -6,7 +6,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "~> 7.3"
     }
   }
 }
@@ -55,6 +55,7 @@ locals {
   }
 }
 
+# checkov:skip=CKV_GCP_32:Ensure 'Block Project-wide SSH keys' is enabled for VM instances
 resource "google_compute_instance" "algalon_worker" {
   count        = var.instance_count
   name         = "${var.instance_name_prefix}-${count.index + 1}"

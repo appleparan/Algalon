@@ -5,7 +5,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "~> 7.3"
     }
   }
 }
@@ -22,6 +22,12 @@ resource "google_compute_subnetwork" "algalon_subnet" {
   region        = var.region
   network       = google_compute_network.algalon_network.id
   description   = "Subnet for Algalon instances"
+  
+  log_config {
+    aggregation_interval = "INTERVAL_10_MIN"
+    flow_sampling        = 0.5
+    metadata             = "INCLUDE_ALL_METADATA"
+  }
 }
 
 # Firewall rule for Grafana access
@@ -80,10 +86,20 @@ resource "google_compute_firewall" "algalon_ssh" {
     protocol = "tcp"
     ports    = ["22"]
   }
+  
+  lifecycle {
+    precondition {
+      condition     = alltrue([ for c in var.ssh_allowed_ips : !(c == "0.0.0.0/0" || c == "::/0") ])
+      error_message = "Refusing to create SSH rule open to the world."
+    }
+  }
 
   source_ranges = var.ssh_allowed_ips
   target_tags   = ["algalon-monitoring", "algalon-worker"]
   description   = "Allow SSH access to instances"
+  log_config {
+    metadata = "INCLUDE_ALL_METADATA"
+  }
 }
 
 # Internal communication between instances
