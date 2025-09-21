@@ -58,12 +58,35 @@ Choose your deployment method based on your needs:
 
 **Production-ready cloud deployment with auto-scaling and infrastructure management.**
 
+Algalon's Terraform infrastructure provides modular, scalable deployment on Google Cloud Platform with automated GPU provisioning, monitoring setup, and security best practices.
+
+#### Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Monitoring    │    │     Worker      │    │     Worker      │
+│     Host        │◄───┤      Node       │    │      Node       │
+│                 │    │                 │    │                 │
+│  ┌─────────────┐│    │ ┌─────────────┐ │    │ ┌─────────────┐ │
+│  │   Grafana   ││    │ │   all-smi   │ │    │ │   all-smi   │ │
+│  │   :3000     ││    │ │   :9090     │ │    │ │   :9090     │ │
+│  └─────────────┘│    │ └─────────────┘ │    │ └─────────────┘ │
+│  ┌─────────────┐│    │ ┌─────────────┐ │    │ ┌─────────────┐ │
+│  │ VictoriaM.  ││    │ │    GPU      │ │    │ │    GPU      │ │
+│  │   :8428     ││    │ │  Hardware   │ │    │ │  Hardware   │ │
+│  └─────────────┘│    │ └─────────────┘ │    │ └─────────────┘ │
+│  ┌─────────────┐│    └─────────────────┘    └─────────────────┘
+│  │   VMAgent   ││
+│  └─────────────┘│
+└─────────────────┘
+```
+
 #### Quick Start with Terraform
 
 ```bash
 # Clone repository
 git clone https://github.com/appleparan/Algalon.git
-cd Algalon/terraform/examples/basic
+cd Algalon/terraform/examples/training-cluster
 
 # Configure deployment
 cp terraform.tfvars.example terraform.tfvars
@@ -74,24 +97,183 @@ terraform init
 terraform apply
 ```
 
-#### What You Get
-- ✅ **Automated Infrastructure**: VPC, firewall rules, compute instances
-- ✅ **Auto-scaling Workers**: Managed instance groups with health checks
-- ✅ **Cost Optimization**: Preemptible instances and auto-shutdown
-- ✅ **Security**: Restricted access and service accounts
-- ✅ **Monitoring**: Built-in logging and monitoring integration
+#### Deployment Options
 
-#### Configuration Example
+**1. Host-Only Deployment (Default)**
+Perfect for setting up monitoring infrastructure first or hybrid scenarios:
+```bash
+terraform apply
+# Creates only monitoring host (worker_count = 0)
+```
+
+**2. Full Training Cluster**
+Deploy with GPU workers for distributed training:
+```bash
+terraform apply -var="worker_count=4" -var="gpu_count=2"
+# Creates monitoring host + 4 workers with 2 GPUs each = 8 total GPUs
+```
+
+#### Configuration Examples
+
+**Small Training Setup (2 GPUs)**
 ```hcl
 # terraform.tfvars
 project_id = "your-gcp-project"
-deployment_name = "algalon-prod"
-worker_count = 3
-gpu_type = "nvidia-tesla-v100"
-cluster_name = "ml-training"
+deployment_name = "algalon-dev"
+worker_count = 1
+gpu_count = 2
+gpu_type = "nvidia-tesla-t4"
 ```
 
-**👉 [See detailed Terraform guide](terraform/README.md)**
+**Large Training Setup (16 GPUs)**
+```hcl
+project_id = "your-gcp-project"
+deployment_name = "algalon-prod"
+worker_count = 4
+gpu_count = 4
+gpu_type = "nvidia-tesla-v100"
+```
+
+**Cost-Optimized with Preemptible Instances**
+```hcl
+project_id = "your-gcp-project"
+worker_count = 2
+gpu_count = 2
+gpu_type = "nvidia-tesla-t4"
+use_preemptible_workers = true
+```
+
+#### What You Get
+- ✅ **Automated Infrastructure**: VPC, firewall rules, compute instances
+- ✅ **GPU-Optimized Scaling**: Automatic instance calculation based on total GPU needs
+- ✅ **Cost Optimization**: Preemptible instances and auto-shutdown
+- ✅ **Security**: Restricted access and service accounts
+- ✅ **Monitoring**: Built-in logging and monitoring integration
+- ✅ **Single Zone Deployment**: All workers in same zone for optimal training performance
+
+#### Key Features
+
+| Feature | Description | Benefit |
+|---------|-------------|---------|
+| **GPU-focused design** | Specify total GPU count, module calculates instances | Simplified scaling |
+| **Single zone deployment** | All instances in same zone | Optimal training communication |
+| **Automatic scaling** | `instance_count = ceil(total_gpu_count / gpus_per_instance)` | Efficient resource allocation |
+| **Training optimized** | No autoscaling disruption | Stable training workloads |
+
+#### GPU Types & Use Cases
+
+| Type | Use Case | Cost | Performance |
+|------|----------|------|-------------|
+| `nvidia-tesla-t4` | Inference, development | Low | Good |
+| `nvidia-tesla-v100` | Training, research | Medium | High |
+| `nvidia-tesla-a100` | Large models, production | High | Highest |
+
+#### Security Configuration
+
+```hcl
+# Production security settings
+grafana_allowed_ips = ["YOUR_IP/32"]
+ssh_allowed_ips = ["YOUR_OFFICE_CIDR/24"]
+enable_worker_external_ip = false
+reserve_static_ip = true
+```
+
+#### Deployment Examples
+
+**Development Environment**
+```bash
+cd terraform/examples/training-cluster
+terraform apply \
+  -var="deployment_name=algalon-dev" \
+  -var="worker_count=1" \
+  -var="use_preemptible_workers=true"
+```
+
+**Production Environment**
+```bash
+terraform apply \
+  -var="deployment_name=algalon-prod" \
+  -var="worker_count=3" \
+  -var="gpu_type=nvidia-tesla-v100" \
+  -var="reserve_static_ip=true"
+```
+
+**Multi-Environment Setup**
+```bash
+# Development
+terraform apply -var="environment_name=dev" -var="use_preemptible_workers=true"
+
+# Staging
+terraform apply -var="environment_name=staging" -var="worker_count=2"
+
+# Production
+terraform apply -var="environment_name=prod" -var="worker_count=5" -var="gpu_type=nvidia-tesla-a100"
+```
+
+**Host-Only Deployment (Hybrid)**
+Perfect for scenarios where workers are on-premise or managed separately:
+```bash
+cd terraform/examples/host-only
+terraform apply
+# Creates only monitoring host for manual worker registration
+```
+
+Benefits of Host-Only deployment:
+- **Hybrid Cloud-OnPremise**: Monitor on-premise workers from cloud host
+- **Flexible Worker Management**: Add/remove workers dynamically
+- **Cost Optimization**: Only pay for monitoring infrastructure
+- **Security**: Workers behind firewalls, only outbound connections needed
+
+After deploying host-only, register workers manually or update the configuration:
+```bash
+# Method 1: Update terraform.tfvars
+worker_targets = "10.0.1.100:9090,10.0.1.101:9090"
+terraform apply
+
+# Method 2: Deploy workers using Docker Compose
+cd algalon_worker
+./setup.sh --version v0.9.0 --port 9090
+```
+
+#### Outputs & Access
+
+After deployment, you'll get:
+- **Grafana URL**: Dashboard for monitoring
+- **VictoriaMetrics URL**: Direct metrics access
+- **SSH commands**: Access to all instances
+- **Worker endpoints**: For training job submission
+
+```bash
+# Access Grafana
+open $(terraform output -raw grafana_url)
+
+# SSH to monitoring host
+eval $(terraform output -raw ssh_commands.monitoring_host)
+
+# Test worker metrics
+curl $(terraform output -json worker_metrics_endpoints | jq -r '.[0]')
+```
+
+#### Troubleshooting
+
+**Common Issues:**
+1. **Setup Fails**: Check `/var/log/algalon-setup.log`
+2. **No GPU Detected**: Verify GPU quota and instance type
+3. **Network Issues**: Check firewall rules and VPC configuration
+4. **Workers Not in Grafana**: Verify VMAgent targets configuration
+
+**Monitoring Deployment**
+```bash
+# List all instances
+gcloud compute instances list --filter="labels.component:algalon"
+
+# Check setup logs
+gcloud compute ssh INSTANCE_NAME --command="sudo tail -f /var/log/algalon-setup.log"
+
+# Test services
+curl -f http://WORKER_IP:9090/metrics
+curl -f http://MONITORING_IP:3000/api/health
+```
 
 ### 🐋 Docker Compose Deployment
 
