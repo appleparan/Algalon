@@ -32,6 +32,7 @@ skip-check:
   # Some instances need public IPs for specific use cases
   - CKV_GCP_40  # Ensure that Compute instances do not have public IP addresses
 
+
 # Checks to enforce (high priority security)
 check:
   - CKV_GCP_1   # Ensure that Google Cloud Resource Manager service has been secured

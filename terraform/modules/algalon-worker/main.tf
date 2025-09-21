@@ -55,7 +55,7 @@ locals {
   }
 }
 
-# checkov:skip=CKV_GCP_32:Ensure 'Block Project-wide SSH keys' is enabled for VM instances
+# checkov:skip=CKV_GCP_32:Worker instances need project-wide SSH keys for automated management
 resource "google_compute_instance" "algalon_worker" {
   count        = var.instance_count
   name         = "${var.instance_name_prefix}-${count.index + 1}"
@@ -118,6 +118,7 @@ resource "google_compute_instance" "algalon_worker" {
 }
 
 # Instance template for managed instance group
+# checkov:skip=CKV_GCP_32:Worker instances need project-wide SSH keys for automated management
 resource "google_compute_instance_template" "algalon_worker_template" {
   count        = var.create_instance_group ? 1 : 0
   name_prefix  = "${var.instance_name_prefix}-template-"
