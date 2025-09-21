@@ -20,13 +20,13 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [google_compute_firewall.algalon_grafana](https://registry.terraform.io/providers/google/latest/docs/resources/compute_firewall) | resource |
-| [google_compute_firewall.algalon_internal](https://registry.terraform.io/providers/google/latest/docs/resources/compute_firewall) | resource |
-| [google_compute_firewall.algalon_metrics_internal](https://registry.terraform.io/providers/google/latest/docs/resources/compute_firewall) | resource |
-| [google_compute_firewall.algalon_ssh](https://registry.terraform.io/providers/google/latest/docs/resources/compute_firewall) | resource |
-| [google_compute_firewall.algalon_victoria_metrics](https://registry.terraform.io/providers/google/latest/docs/resources/compute_firewall) | resource |
-| [google_compute_network.algalon_network](https://registry.terraform.io/providers/google/latest/docs/resources/compute_network) | resource |
-| [google_compute_subnetwork.algalon_subnet](https://registry.terraform.io/providers/google/latest/docs/resources/compute_subnetwork) | resource |
+| [google_compute_firewall.algalon_grafana](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.algalon_internal](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.algalon_metrics_internal](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.algalon_ssh](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_firewall.algalon_victoria_metrics](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_firewall) | resource |
+| [google_compute_network.algalon_network](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_network) | resource |
+| [google_compute_subnetwork.algalon_subnet](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_subnetwork) | resource |
 
 ## Inputs
 
