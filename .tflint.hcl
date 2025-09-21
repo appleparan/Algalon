@@ -63,25 +63,8 @@ rule "terraform_standard_module_structure" {
 }
 
 # Google Cloud specific rules
-rule "google_compute_instance_serial_port" {
-  enabled = true
-}
-
-rule "google_compute_firewall_rule_allow_all" {
-  enabled = true
-}
-
-rule "google_project_iam_member_role_too_broad" {
-  enabled = true
-}
-
-rule "google_sql_database_instance_backup_configuration" {
-  enabled = true
-}
-
-rule "google_storage_bucket_uniform_bucket_level_access" {
-  enabled = true
-}
+# Note: These rules are available in the Google provider plugin
+# and will be automatically applied when the plugin is enabled
 
 # Disable rules that are too strict for our use case
 rule "terraform_required_version" {

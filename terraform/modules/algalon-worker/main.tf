@@ -84,13 +84,13 @@ resource "google_compute_instance" "algalon_worker" {
 
   # GPU instances must use TERMINATE scheduling
   scheduling {
-    on_host_maintenance = var.gpu_type != null ? "TERMINATE" : "MIGRATE"
-    preemptible         = var.preemptible
+    on_host_maintenance = local.scheduling_config.on_host_maintenance
+    preemptible         = local.scheduling_config.preemptible
   }
 
   network_interface {
-    network    = var.network_name
-    subnetwork = var.subnet_name
+    network    = local.network_interface_config.network
+    subnetwork = local.network_interface_config.subnetwork
 
     dynamic "access_config" {
       for_each = var.enable_external_ip ? [1] : []
@@ -103,16 +103,13 @@ resource "google_compute_instance" "algalon_worker" {
   metadata = local.common_metadata
   tags     = local.common_tags
 
-  labels = merge(var.labels, {
-    component    = "algalon-worker"
-    environment  = var.environment_name
-    cluster      = var.cluster_name
+  labels = merge(local.common_labels, {
     worker_index = tostring(count.index + 1)
   })
 
   service_account {
-    email  = var.service_account_email
-    scopes = var.service_account_scopes
+    email  = local.service_account_config.email
+    scopes = local.service_account_config.scopes
   }
 
   lifecycle {
