@@ -277,3 +277,61 @@ grafana_allowed_ips = ["YOUR_OFFICE_CIDR/24"]
 - [GitHub Issues](https://github.com/appleparan/Algalon/issues)
 - [Main Documentation](../../../README.md)
 - [Worker Deployment Guide](../../../WORKER_DEPLOYMENT.md)
+<!-- BEGIN_TF_DOCS -->
+## Requirements
+
+| Name | Version |
+|------|---------|
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.3 |
+
+## Providers
+
+No providers.
+
+## Modules
+
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_monitoring_host"></a> [monitoring\_host](#module\_monitoring\_host) | ../../modules/algalon-host | n/a |
+| <a name="module_network"></a> [network](#module\_network) | ../../modules/network | n/a |
+
+## Resources
+
+No resources.
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_cluster_name"></a> [cluster\_name](#input\_cluster\_name) | Name of the cluster for labeling | `string` | `"production"` | no |
+| <a name="input_deployment_name"></a> [deployment\_name](#input\_deployment\_name) | Name prefix for deployed resources | `string` | `"algalon-host-only"` | no |
+| <a name="input_enable_external_victoria_metrics"></a> [enable\_external\_victoria\_metrics](#input\_enable\_external\_victoria\_metrics) | Whether to allow external access to VictoriaMetrics | `bool` | `false` | no |
+| <a name="input_enable_host_external_ip"></a> [enable\_host\_external\_ip](#input\_enable\_host\_external\_ip) | Whether to assign an external IP to the host | `bool` | `true` | no |
+| <a name="input_enable_ssh_access"></a> [enable\_ssh\_access](#input\_enable\_ssh\_access) | Whether to enable SSH access to instances | `bool` | `true` | no |
+| <a name="input_environment_name"></a> [environment\_name](#input\_environment\_name) | Environment name for labeling | `string` | `"host-only"` | no |
+| <a name="input_grafana_allowed_ips"></a> [grafana\_allowed\_ips](#input\_grafana\_allowed\_ips) | List of IP ranges allowed to access Grafana | `list(string)` | <pre>[<br/>  "35.235.240.0/20"<br/>]</pre> | no |
+| <a name="input_host_boot_disk_size"></a> [host\_boot\_disk\_size](#input\_host\_boot\_disk\_size) | Size of the host boot disk in GB | `number` | `50` | no |
+| <a name="input_host_machine_type"></a> [host\_machine\_type](#input\_host\_machine\_type) | Machine type for the monitoring host | `string` | `"c4a-standard-8"` | no |
+| <a name="input_labels"></a> [labels](#input\_labels) | Labels to apply to resources | `map(string)` | <pre>{<br/>  "component": "algalon-host",<br/>  "deployment": "host-only",<br/>  "managed-by": "terraform"<br/>}</pre> | no |
+| <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Name of the VPC network | `string` | `"algalon-host-network"` | no |
+| <a name="input_project_id"></a> [project\_id](#input\_project\_id) | GCP Project ID | `string` | n/a | yes |
+| <a name="input_region"></a> [region](#input\_region) | GCP region for resources | `string` | `"us-central1"` | no |
+| <a name="input_reserve_static_ip"></a> [reserve\_static\_ip](#input\_reserve\_static\_ip) | Whether to reserve a static external IP for the host | `bool` | `true` | no |
+| <a name="input_ssh_allowed_ips"></a> [ssh\_allowed\_ips](#input\_ssh\_allowed\_ips) | List of IP ranges allowed for SSH access | `list(string)` | <pre>[<br/>  "35.235.240.0/20"<br/>]</pre> | no |
+| <a name="input_subnet_cidr"></a> [subnet\_cidr](#input\_subnet\_cidr) | CIDR range for the subnet | `string` | `"10.0.0.0/24"` | no |
+| <a name="input_worker_targets"></a> [worker\_targets](#input\_worker\_targets) | Comma-separated list of worker targets (host:port). Leave empty for host-only deployment, add manually later | `string` | `""` | no |
+| <a name="input_zones"></a> [zones](#input\_zones) | List of zones for deployment | `list(string)` | <pre>[<br/>  "us-central1-a"<br/>]</pre> | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_deployment_summary"></a> [deployment\_summary](#output\_deployment\_summary) | Summary of deployed resources |
+| <a name="output_grafana_url"></a> [grafana\_url](#output\_grafana\_url) | URL to access Grafana dashboard |
+| <a name="output_monitoring_host_external_ip"></a> [monitoring\_host\_external\_ip](#output\_monitoring\_host\_external\_ip) | External IP address of the monitoring host |
+| <a name="output_monitoring_host_internal_ip"></a> [monitoring\_host\_internal\_ip](#output\_monitoring\_host\_internal\_ip) | Internal IP address of the monitoring host |
+| <a name="output_ssh_command"></a> [ssh\_command](#output\_ssh\_command) | Command to SSH into the monitoring host |
+| <a name="output_victoria_metrics_url"></a> [victoria\_metrics\_url](#output\_victoria\_metrics\_url) | URL to access VictoriaMetrics |
+| <a name="output_worker_registration_info"></a> [worker\_registration\_info](#output\_worker\_registration\_info) | Information for manually registering workers |
+<!-- END_TF_DOCS -->
