@@ -20,9 +20,9 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [google_compute_address.algalon_host_ip](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_address) | resource |
-| [google_compute_instance.algalon_host](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance) | resource |
-| [google_compute_image.cos_image](https://registry.terraform.io/providers/hashicorp/google/latest/docs/data-sources/compute_image) | data source |
+| [google_compute_address.algalon_host_ip](https://registry.terraform.io/providers/google/latest/docs/resources/compute_address) | resource |
+| [google_compute_instance.algalon_host](https://registry.terraform.io/providers/google/latest/docs/resources/compute_instance) | resource |
+| [google_compute_image.cos_image](https://registry.terraform.io/providers/google/latest/docs/data-sources/compute_image) | data source |
 
 ## Inputs
 
