@@ -22,7 +22,7 @@ resource "google_compute_subnetwork" "algalon_subnet" {
   region        = var.region
   network       = google_compute_network.algalon_network.id
   description   = "Subnet for Algalon instances"
-  
+
   log_config {
     aggregation_interval = "INTERVAL_10_MIN"
     flow_sampling        = 0.5
@@ -86,10 +86,10 @@ resource "google_compute_firewall" "algalon_ssh" {
     protocol = "tcp"
     ports    = ["22"]
   }
-  
+
   lifecycle {
     precondition {
-      condition     = alltrue([ for c in var.ssh_allowed_ips : !(c == "0.0.0.0/0" || c == "::/0") ])
+      condition     = alltrue([for c in var.ssh_allowed_ips : !(c == "0.0.0.0/0" || c == "::/0")])
       error_message = "Refusing to create SSH rule open to the world."
     }
   }

@@ -37,10 +37,10 @@ module "workers" {
   source = "../../modules/algalon-worker"
 
   instance_name_prefix = "${var.deployment_name}-worker"
-  total_gpu_count      = var.worker_count * var.gpu_count  # Total GPUs needed
-  gpus_per_instance    = var.gpu_count                     # GPUs per instance
+  total_gpu_count      = var.worker_count * var.gpu_count # Total GPUs needed
+  gpus_per_instance    = var.gpu_count                    # GPUs per instance
   machine_type         = var.worker_machine_type
-  zone                 = var.zones[0]                      # Use first zone for training
+  zone                 = var.zones[0] # Use first zone for training
   network_name         = module.network.network_name
   subnet_name          = module.network.subnet_name
 
