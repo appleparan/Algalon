@@ -22,7 +22,7 @@ variable "grafana_allowed_ips" {
   default     = ["35.235.240.0/20"]
   validation {
     condition = alltrue([
-      for cidr in var.ssh_allowed_ips :
+      for cidr in var.grafana_allowed_ips :
       !(cidr == "0.0.0.0/0" || cidr == "::/0")
     ])
     error_message = "grafana_allowed_ips must not include 0.0.0.0/0 or ::/0."
@@ -35,7 +35,7 @@ variable "victoria_metrics_allowed_ips" {
   default     = ["35.235.240.0/20"]
   validation {
     condition = alltrue([
-      for cidr in var.ssh_allowed_ips :
+      for cidr in var.victoria_metrics_allowed_ips :
       !(cidr == "0.0.0.0/0" || cidr == "::/0")
     ])
     error_message = "victoria_metrics_allowed_ips must not include 0.0.0.0/0 or ::/0."

@@ -59,6 +59,16 @@ jobs:
           cd terraform/examples/basic
           terraform validate
 
+      - name: Terraform Init (Host-only Example)
+        run: |
+          cd terraform/examples/host-only
+          terraform init -backend=false
+
+      - name: Terraform Validate (Host-only Example)
+        run: |
+          cd terraform/examples/host-only
+          terraform validate
+
       - name: Terraform Init (Modules)
         run: |
           for module in terraform/modules/*/; do
