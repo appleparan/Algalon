@@ -86,7 +86,7 @@ func TestAlgalonWorkerConfiguration(t *testing.T) {
 			vars := map[string]interface{}{
 				"network_name":       "test-network",
 				"subnet_name":        "test-subnet",
-				"instance_count":     tc.instanceCount,
+				"total_gpu_count":    tc.instanceCount * tc.gpuCount, // Calculate total GPUs
 				"machine_type":       tc.machineType,
 				"all_smi_version":    tc.allSmiVersion,
 				"all_smi_port":       tc.allSmiPort,
@@ -98,7 +98,7 @@ func TestAlgalonWorkerConfiguration(t *testing.T) {
 			// Only add GPU config if GPU type is specified
 			if tc.gpuType != "" {
 				vars["gpu_type"] = tc.gpuType
-				vars["gpu_count"] = tc.gpuCount
+				vars["gpus_per_instance"] = tc.gpuCount
 			}
 
 			terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
@@ -142,31 +142,61 @@ func TestAlgalonWorkerBasicPlan(t *testing.T) {
 	assert.NoError(t, planErr)
 }
 
-func TestAlgalonWorkerManagedInstanceGroup(t *testing.T) {
+func TestAlgalonWorkerGPUAllocation(t *testing.T) {
 	t.Parallel()
 
-	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/modules/algalon-worker",
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"network_name":             "test-network",
-			"subnet_name":              "test-subnet",
-			"create_instance_group":    true,
-			"instance_group_size":      3,
-			"enable_autoscaling":       true,
-			"autoscaling_min_replicas": 2,
-			"autoscaling_max_replicas": 10,
-			"autoscaling_cpu_target":   0.8,
+	testCases := []struct {
+		name              string
+		totalGPUs         int
+		gpusPerInstance   int
+		expectedInstances int
+	}{
+		{
+			name:              "Single GPU",
+			totalGPUs:         1,
+			gpusPerInstance:   1,
+			expectedInstances: 1,
 		},
-	})
+		{
+			name:              "8 GPUs with 2 per instance",
+			totalGPUs:         8,
+			gpusPerInstance:   2,
+			expectedInstances: 4,
+		},
+		{
+			name:              "7 GPUs with 2 per instance (ceil)",
+			totalGPUs:         7,
+			gpusPerInstance:   2,
+			expectedInstances: 4,
+		},
+	}
 
-	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Test planning
-	_, planErr := terraform.PlanE(t, terraformOptions)
-	assert.NoError(t, planErr)
+			terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+				TerraformDir: "../../terraform/modules/algalon-worker",
+				NoColor:      true,
+				Vars: map[string]interface{}{
+					"network_name":       "test-network",
+					"subnet_name":        "test-subnet",
+					"total_gpu_count":    tc.totalGPUs,
+					"gpus_per_instance":  tc.gpusPerInstance,
+					"gpu_type":           "nvidia-tesla-t4",
+				},
+			})
+
+			terraform.Init(t, terraformOptions)
+			_, validationErr := terraform.ValidateE(t, terraformOptions)
+			assert.NoError(t, validationErr)
+
+			// Test planning
+			_, planErr := terraform.PlanE(t, terraformOptions)
+			assert.NoError(t, planErr)
+		})
+	}
 }
 
 func TestAlgalonWorkerLabels(t *testing.T) {

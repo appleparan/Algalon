@@ -37,28 +37,22 @@ output "worker_targets" {
   ])
 }
 
-output "zones" {
-  description = "Zones where worker instances are deployed"
-  value       = google_compute_instance.algalon_worker[*].zone
+output "zone" {
+  description = "Zone where worker instances are deployed"
+  value       = var.zone
 }
 
-# Managed Instance Group outputs
-output "instance_group_manager" {
-  description = "Name of the managed instance group (if created)"
-  value       = var.create_instance_group ? google_compute_instance_group_manager.algalon_worker_group[0].name : null
+output "total_gpu_count" {
+  description = "Total number of GPUs allocated across all instances"
+  value       = var.total_gpu_count
 }
 
-output "instance_group_self_link" {
-  description = "Self link of the managed instance group (if created)"
-  value       = var.create_instance_group ? google_compute_instance_group_manager.algalon_worker_group[0].self_link : null
+output "instance_count" {
+  description = "Number of instances created"
+  value       = local.instance_count
 }
 
-output "health_check_self_link" {
-  description = "Self link of the health check (if created)"
-  value       = var.create_instance_group ? google_compute_health_check.algalon_worker_health[0].self_link : null
-}
-
-output "autoscaler_self_link" {
-  description = "Self link of the autoscaler (if created)"
-  value       = var.create_instance_group && var.enable_autoscaling ? google_compute_autoscaler.algalon_worker_autoscaler[0].self_link : null
+output "gpus_per_instance" {
+  description = "Number of GPUs per instance"
+  value       = var.gpus_per_instance
 }

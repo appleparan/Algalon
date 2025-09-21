@@ -4,8 +4,8 @@ variable "instance_name_prefix" {
   default     = "algalon-worker"
 }
 
-variable "instance_count" {
-  description = "Number of worker instances to create"
+variable "total_gpu_count" {
+  description = "Total number of GPUs needed for training"
   type        = number
   default     = 1
 }
@@ -16,10 +16,10 @@ variable "machine_type" {
   default     = "n1-standard-1"
 }
 
-variable "zones" {
-  description = "List of GCP zones for worker instances"
-  type        = list(string)
-  default     = ["us-central1-a"]
+variable "zone" {
+  description = "GCP zone for worker instances (single zone for optimal training performance)"
+  type        = string
+  default     = "us-central1-a"
 }
 
 variable "network_name" {
@@ -38,7 +38,7 @@ variable "gpu_type" {
   default     = null
 }
 
-variable "gpu_count" {
+variable "gpus_per_instance" {
   description = "Number of GPUs to attach per instance"
   type        = number
   default     = 1
@@ -118,45 +118,3 @@ variable "environment_name" {
   default     = "gpu-cluster"
 }
 
-# Managed Instance Group variables
-variable "create_instance_group" {
-  description = "Whether to create a managed instance group"
-  type        = bool
-  default     = false
-}
-
-variable "instance_group_size" {
-  description = "Target size for the managed instance group"
-  type        = number
-  default     = 3
-}
-
-variable "enable_autoscaling" {
-  description = "Whether to enable autoscaling for the instance group"
-  type        = bool
-  default     = false
-}
-
-variable "autoscaling_min_replicas" {
-  description = "Minimum number of replicas for autoscaling"
-  type        = number
-  default     = 1
-}
-
-variable "autoscaling_max_replicas" {
-  description = "Maximum number of replicas for autoscaling"
-  type        = number
-  default     = 10
-}
-
-variable "autoscaling_cooldown" {
-  description = "Cooldown period for autoscaling in seconds"
-  type        = number
-  default     = 300
-}
-
-variable "autoscaling_cpu_target" {
-  description = "Target CPU utilization for autoscaling"
-  type        = number
-  default     = 0.8
-}
