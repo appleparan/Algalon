@@ -4,13 +4,13 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 5.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.3 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 5.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | 5.45.2 |
 
 ## Modules
 
@@ -29,13 +29,13 @@ No modules.
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_boot_disk_size"></a> [boot\_disk\_size](#input\_boot\_disk\_size) | Size of the boot disk in GB | `number` | `50` | no |
-| <a name="input_boot_disk_type"></a> [boot\_disk\_type](#input\_boot\_disk\_type) | Type of the boot disk | `string` | `"pd-standard"` | no |
+| <a name="input_boot_disk_type"></a> [boot\_disk\_type](#input\_boot\_disk\_type) | Type of the boot disk | `string` | `"hyperdisk-balanced"` | no |
 | <a name="input_cluster_name"></a> [cluster\_name](#input\_cluster\_name) | Name of the cluster for labeling | `string` | `"production"` | no |
 | <a name="input_enable_external_ip"></a> [enable\_external\_ip](#input\_enable\_external\_ip) | Whether to assign an external IP to the instance | `bool` | `true` | no |
-| <a name="input_environment_name"></a> [environment\_name](#input\_environment\_name) | Environment name for labeling | `string` | `"gpu-cluster"` | no |
+| <a name="input_environment_name"></a> [environment\_name](#input\_environment\_name) | Environment name for labeling | `string` | `"gpu-monitoring-cluster"` | no |
 | <a name="input_instance_name"></a> [instance\_name](#input\_instance\_name) | Name of the monitoring host instance | `string` | `"algalon-monitoring-host"` | no |
 | <a name="input_labels"></a> [labels](#input\_labels) | Labels to apply to the instance | `map(string)` | `{}` | no |
-| <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | Machine type for the monitoring host | `string` | `"n1-standard-2"` | no |
+| <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | Machine type for the monitoring host | `string` | `"c4a-standard-8"` | no |
 | <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Name of the VPC network | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | GCP region for resources | `string` | `"us-central1"` | no |
 | <a name="input_reserve_static_ip"></a> [reserve\_static\_ip](#input\_reserve\_static\_ip) | Reserve a static IP address (optional, for persistent IP) | `bool` | `false` | no |

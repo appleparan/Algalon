@@ -4,13 +4,13 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 5.0 |
+| <a name="requirement_google"></a> [google](#requirement\_google) | ~> 7.3 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 5.0 |
+| <a name="provider_google"></a> [google](#provider\_google) | 5.45.2 |
 
 ## Modules
 
@@ -34,12 +34,12 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_enable_external_victoria_metrics"></a> [enable\_external\_victoria\_metrics](#input\_enable\_external\_victoria\_metrics) | Whether to allow external access to VictoriaMetrics | `bool` | `false` | no |
 | <a name="input_enable_ssh_access"></a> [enable\_ssh\_access](#input\_enable\_ssh\_access) | Whether to allow SSH access to instances | `bool` | `true` | no |
-| <a name="input_grafana_allowed_ips"></a> [grafana\_allowed\_ips](#input\_grafana\_allowed\_ips) | List of IP ranges allowed to access Grafana | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
+| <a name="input_grafana_allowed_ips"></a> [grafana\_allowed\_ips](#input\_grafana\_allowed\_ips) | List of IP ranges allowed to access Grafana | `list(string)` | <pre>[<br/>  "35.235.240.0/20"<br/>]</pre> | no |
 | <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Name of the VPC network | `string` | `"algalon-network"` | no |
 | <a name="input_region"></a> [region](#input\_region) | GCP region for the subnet | `string` | `"us-central1"` | no |
-| <a name="input_ssh_allowed_ips"></a> [ssh\_allowed\_ips](#input\_ssh\_allowed\_ips) | List of IP ranges allowed SSH access | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
+| <a name="input_ssh_allowed_ips"></a> [ssh\_allowed\_ips](#input\_ssh\_allowed\_ips) | List of IP ranges allowed SSH access | `list(string)` | <pre>[<br/>  "35.235.240.0/20"<br/>]</pre> | no |
 | <a name="input_subnet_cidr"></a> [subnet\_cidr](#input\_subnet\_cidr) | CIDR block for the subnet | `string` | `"10.1.0.0/16"` | no |
-| <a name="input_victoria_metrics_allowed_ips"></a> [victoria\_metrics\_allowed\_ips](#input\_victoria\_metrics\_allowed\_ips) | List of IP ranges allowed to access VictoriaMetrics | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
+| <a name="input_victoria_metrics_allowed_ips"></a> [victoria\_metrics\_allowed\_ips](#input\_victoria\_metrics\_allowed\_ips) | List of IP ranges allowed to access VictoriaMetrics | `list(string)` | <pre>[<br/>  "35.235.240.0/20"<br/>]</pre> | no |
 | <a name="input_worker_ports"></a> [worker\_ports](#input\_worker\_ports) | List of ports used by worker nodes for metrics | `list(string)` | <pre>[<br/>  "9090"<br/>]</pre> | no |
 
 ## Outputs
