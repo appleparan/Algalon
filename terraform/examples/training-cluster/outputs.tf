@@ -20,22 +20,22 @@ output "monitoring_host_internal_ip" {
 
 output "worker_internal_ips" {
   description = "Internal IPs of worker instances"
-  value       = module.workers.internal_ips
+  value       = var.worker_count > 0 ? module.workers[0].internal_ips : []
 }
 
 output "worker_external_ips" {
   description = "External IPs of worker instances"
-  value       = module.workers.external_ips
+  value       = var.worker_count > 0 ? module.workers[0].external_ips : []
 }
 
 output "worker_metrics_endpoints" {
   description = "Metrics endpoints for worker instances"
-  value       = module.workers.metrics_endpoints
+  value       = var.worker_count > 0 ? module.workers[0].metrics_endpoints : []
 }
 
 output "worker_targets" {
   description = "Worker targets configured for monitoring"
-  value       = module.workers.worker_targets
+  value       = var.worker_count > 0 ? module.workers[0].worker_targets : ""
 }
 
 output "network_name" {
@@ -53,10 +53,10 @@ output "ssh_commands" {
   description = "SSH commands to connect to instances"
   value = {
     monitoring_host = "gcloud compute ssh ${module.monitoring_host.instance_name} --zone=${var.zones[0]}"
-    workers = [
-      for i, name in module.workers.instance_names :
-      "gcloud compute ssh ${name} --zone=${module.workers.zones[i]}"
-    ]
+    workers = var.worker_count > 0 ? [
+      for i, name in module.workers[0].instance_names :
+      "gcloud compute ssh ${name} --zone=${var.zones[0]}"
+    ] : []
   }
 }
 
@@ -71,6 +71,6 @@ output "deployment_summary" {
     gpu_type        = var.gpu_type
     all_smi_version = var.all_smi_version
     grafana_url     = module.monitoring_host.grafana_url
-    worker_targets  = module.workers.worker_targets
+    worker_targets  = var.worker_count > 0 ? module.workers[0].worker_targets : ""
   }
 }
