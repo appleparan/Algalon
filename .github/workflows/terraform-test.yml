@@ -109,6 +109,9 @@ jobs:
       - name: Install Checkov
         run: pip install checkov==${{ env.CHECKOV_VERSION }}
 
+      # CKV_GCP_30: "Ensure that instances are not configured to use the default service account."
+      # CKV_GCP_35: "Enable connecting to serial ports' is not enabled for VM Instance."
+      # CKV_GCP_36: "Ensure that IP forwarding is not enabled on Instances."
       - name: Run Checkov
         run: |
           mkdir -p reports

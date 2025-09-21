@@ -6,7 +6,9 @@ directory:
   - terraform/
 
 # Output format
-output: cli
+output: 
+  - cli
+  - sarif
 
 # Create baseline (skip existing issues)
 create-baseline: false
@@ -20,63 +22,45 @@ framework:
 
 # Skip checks that are not applicable to our use case
 skip-check:
-  # GPU instances require specific maintenance policies
-  - CKV_GCP_62  # Ensure Compute instances do not have public IP addresses
+  # VM disks for critical VMs must be encrypted but we use default encryption
+  - CKV_GCP_37  # Ensure VM disks for critical VMs are encrypted with Customer Supplied Encryption Keys (CSEK)
+  - CKV_GCP_38  # Ensure VM disks for critical VMs are encrypted with Customer Supplied Encryption Keys (CSEK)
 
-  # Development/testing instances may need broader access
-  - CKV_GCP_2   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 22
-  - CKV_GCP_3   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 3389
-  - CKV_GCP_106 # Ensure that GCP compute firewall ingress does not allow unrestricted access on port 22
-  - CKV_GCP_107 # Ensure that GCP compute firewall ingress does not allow unrestricted access on port 3389
-
-  # Monitoring ports need to be accessible for the use case
-  - CKV_GCP_88  # Ensure that GCP compute firewall ingress does not allow unrestricted access on all ports
-
-  # Container-Optimized OS doesn't support some security features
-  - CKV_GCP_32  # Ensure 'Block Project-wide SSH keys' is enabled for VM instances
-  - CKV_GCP_34  # Ensure that no instance in the project overrides the project setting for enabling OSLogin
-  - CKV_GCP_35  # Ensure 'Enable connecting to serial ports' is not enabled for VM Instance
-  - CKV_GCP_36  # Ensure that IP forwarding is not enabled on Instances
-  - CKV_GCP_37  # Ensure VM instances are not configured to use the default service account with full access to all Cloud APIs
-  - CKV_GCP_38  # Ensure VM instances are not configured to use the default service account
+  # Shielded VM is not supported on all machine types
   - CKV_GCP_39  # Ensure Compute instances are launched with shielded VM enabled
-  - CKV_GCP_40  # Ensure that instances are not configured to use the default service account with full access to all Cloud APIs
 
-  # Preemptible instances have specific limitations
-  - CKV_GCP_10  # Ensure that Compute instances do not have public IP addresses (needed for some testing)
+  # Some instances need public IPs for specific use cases
+  - CKV_GCP_40  # Ensure that Compute instances do not have public IP addresses
 
 # Checks to enforce (high priority security)
 check:
   - CKV_GCP_1   # Ensure that Google Cloud Resource Manager service has been secured
-  - CKV_GCP_7   # Ensure Legacy Authorization is set to Disabled on Kubernetes Engine Clusters
-  - CKV_GCP_8   # Ensure Stackdriver Monitoring is set to Enabled on Kubernetes Engine Clusters
-  - CKV_GCP_9   # Ensure Stackdriver Logging is set to Enabled on Kubernetes Engine Clusters
-  - CKV_GCP_11  # Ensure that Cloud SQL database instances do not have public IPs
-  - CKV_GCP_12  # Ensure that Cloud SQL database instances require all incoming connections to use SSL
-  - CKV_GCP_13  # Ensure that SQL database instances do not have cross database ownership chaining enabled
-  - CKV_GCP_14  # Ensure that Cloud SQL database instances are configured with automated backups
-  - CKV_GCP_15  # Ensure that BigQuery datasets are not anonymously or publicly accessible
-  - CKV_GCP_16  # Ensure that BigQuery datasets are not anonymously or publicly accessible
-  - CKV_GCP_17  # Ensure that Cloud Storage buckets are not anonymously or publicly accessible
-  - CKV_GCP_18  # Ensure that Cloud Storage bucket is not anonymously or publicly readable
-  - CKV_GCP_19  # Ensure that Cloud Storage buckets are not anonymously or publicly writable
-  - CKV_GCP_20  # Ensure that Cloud Storage bucket does not log to itself
-  - CKV_GCP_21  # Ensure that Vertex AI notebooks are not publicly accessible
-  - CKV_GCP_22  # Ensure that Container Analysis is enabled
-  - CKV_GCP_23  # Ensure that security policies are attached to target pools and backend services
-  - CKV_GCP_24  # Ensure that the default network does not exist in a project
-  - CKV_GCP_25  # Ensure that VPC Flow Logs is enabled for every subnet in a VPC Network
-  - CKV_GCP_26  # Ensure that VPC subnets do not have private Google access disabled
-  - CKV_GCP_27  # Ensure that Private cluster is enabled when creating Kubernetes clusters
-  - CKV_GCP_28  # Ensure that GKE clusters are configured with monitoring enabled
-  - CKV_GCP_29  # Ensure that GKE clusters are configured with logging enabled
+  - CKV_GCP_2   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 22
+  - CKV_GCP_3   # Ensure GCP compute firewall ingress does not allow unrestricted access on port 3389
+  - CKV_GCP_4   # Ensure no HTTPS or SSL proxy load balancers permit SSL policies with weak cipher suites
+  - CKV_GCP_26  # Ensure that VPC Flow Logs is enabled for every subnet in a VPC Network
+  - CKV_GCP_27  # Ensure that the default network does not exist in a project
+  - CKV_GCP_28  # Ensure that Cloud Storage bucket is not anonymously or publicly accessible
+  - CKV_GCP_29  # Ensure that Cloud Storage bucket is not anonymously or publicly accessible
+  - CKV_GCP_30  # Ensure that instances are not configured to use the default service account
+  - CKV_GCP_31  # Ensure that instances are not configured to use the default service account with full access to all Cloud APIs
+  - CKV_GCP_32  # Ensure 'Block Project-wide SSH keys' is enabled for VM instances
+  - CKV_GCP_33  # Ensure oslogin is enabled for a Project
+  - CKV_GCP_34  # Ensure that no instance in the project overrides the project setting for enabling OSLogin(OSLogin needs to be enabled in project metadata for all instances)
+  - CKV_GCP_35  # Ensure ‘Enable connecting to serial ports’ is not enabled for VM Instance
+  - CKV_GCP_36  # Ensure that IP forwarding is not enabled on Instances
+  - CKV_GCP_41  # Ensure that IAM users are not assigned the Service Account User or Service Account Token Creator roles at project level
+  - CKV_GCP_42  # Ensure that Service Account has no Admin privileges
+  - CKV_GCP_44  # Ensure no roles that enable to impersonate and manage all service accounts are used at a folder level
+  - CKV_GCP_45  # Ensure no roles that enable to impersonate and manage all service accounts are used at an organization level
+  - CKV_GCP_46  # Ensure Default Service account is not used at a project level
+  - CKV_GCP_47  # Ensure default service account is not used at an organization level
+  - CKV_GCP_48  # Ensure roles do not impersonate or manage Service Accounts used at project level
+  - CKV_GCP_88  # Ensure Google compute firewall ingress does not allow unrestricted mysql access
+  - CKV_GCP_106 # Ensure Google compute firewall ingress does not allow unrestricted http port 80 access
+  - CKV_GCP_107 # Cloud functions should not be public
 
-# Severity levels to report
-severity:
-  - critical
-  - high
-  - medium
-  - low
+
 
 # External checks directory (if any custom checks)
 external-checks-dir: []
@@ -90,9 +74,6 @@ compact: true
 # Create a JUnit XML report
 output-file-path: reports/
 
-# Create SARIF report for GitHub Security tab
-output-format: cli,sarif
-
 # Baseline file to compare against
 baseline: null
 
@@ -100,13 +81,10 @@ baseline: null
 ca-certificate: null
 
 # Repository root for relative paths
-repo-root-for-plan-enrichment: []
+# repo-root-for-plan-enrichment:
 
 # External modules directory
-external-modules-dir: []
-
-# Download external modules
-download-external-modules: true
+# external-modules-download-path:
 
 # Evaluate variables
 evaluate-variables: true
