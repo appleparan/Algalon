@@ -18,10 +18,10 @@ func TestTrainingClusterExampleValidation(t *testing.T) {
 		},
 	})
 
-	// Test initialization and validation
+	// Test initialization and planning (includes validation)
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
+	_, planErr := terraform.PlanE(t, terraformOptions)
+	assert.NoError(t, planErr, "Training cluster example should plan successfully")
 }
 
 func TestTrainingClusterExamplePlan(t *testing.T) {
@@ -38,11 +38,7 @@ func TestTrainingClusterExamplePlan(t *testing.T) {
 
 	terraform.Init(t, terraformOptions)
 	_, planErr := terraform.PlanE(t, terraformOptions)
-	assert.NoError(t, planErr)
-
-	// Test basic validation - plan should succeed
-	// For detailed resource validation, consider using terraform show with JSON output
-	// or implement infrastructure tests after apply
+	assert.NoError(t, planErr, "Training cluster example plan should succeed")
 }
 
 func TestTrainingClusterExampleWithWorkers(t *testing.T) {
@@ -52,21 +48,17 @@ func TestTrainingClusterExampleWithWorkers(t *testing.T) {
 		TerraformDir: "../../terraform/examples/training-cluster",
 		NoColor:      true,
 		Vars: map[string]interface{}{
-			"project_id":               "test-project-123",
-			"region":                   "us-central1",
-			"worker_count":             2,
-			"worker_machine_type":      "n1-standard-2",
-			"worker_gpu_type":          "nvidia-tesla-t4",
-			"worker_gpu_count":         1,
+			"project_id":                "test-project-123",
+			"region":                    "us-central1",
+			"worker_count":              2,
+			"worker_machine_type":       "n1-standard-2",
+			"gpu_type":                  "nvidia-tesla-t4",
+			"gpu_count":                 1,
 			"enable_worker_external_ip": false,
 		},
 	})
 
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
-
-	// Test planning
 	_, planErr := terraform.PlanE(t, terraformOptions)
 	assert.NoError(t, planErr)
 }
@@ -84,10 +76,6 @@ func TestTrainingClusterExampleMinimal(t *testing.T) {
 	})
 
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
-
-	// Test planning
 	_, planErr := terraform.PlanE(t, terraformOptions)
 	assert.NoError(t, planErr)
 }

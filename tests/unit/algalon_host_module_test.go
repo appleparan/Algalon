@@ -20,10 +20,10 @@ func TestAlgalonHostModule(t *testing.T) {
 		},
 	})
 
-	// Test initialization and validation
+	// Test initialization and planning (includes validation)
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
+	_, planErr := terraform.PlanE(t, terraformOptions)
+	assert.NoError(t, planErr, "Algalon host module should plan successfully")
 }
 
 func TestAlgalonHostConfiguration(t *testing.T) {
@@ -94,11 +94,7 @@ func TestAlgalonHostConfiguration(t *testing.T) {
 
 			terraform.Init(t, terraformOptions)
 			_, planErr := terraform.PlanE(t, terraformOptions)
-			assert.NoError(t, planErr)
-
-			// Test basic validation - plan should succeed
-			// For detailed resource validation, consider using terraform show with JSON output
-			// or implement infrastructure tests after apply
+			assert.NoError(t, planErr, "Algalon host configuration '%s' should plan successfully", tc.name)
 		})
 	}
 }
@@ -119,12 +115,10 @@ func TestAlgalonHostBasicPlan(t *testing.T) {
 	})
 
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
 
-	// Test planning
+	// Test planning (includes validation)
 	_, planErr := terraform.PlanE(t, terraformOptions)
-	assert.NoError(t, planErr)
+	assert.NoError(t, planErr, "Algalon host basic plan should succeed")
 }
 
 func TestAlgalonHostDiskConfiguration(t *testing.T) {
@@ -164,12 +158,10 @@ func TestAlgalonHostDiskConfiguration(t *testing.T) {
 			})
 
 			terraform.Init(t, terraformOptions)
-			_, validationErr := terraform.ValidateE(t, terraformOptions)
-			assert.NoError(t, validationErr)
 
-			// Test planning
+			// Test planning (includes validation)
 			_, planErr := terraform.PlanE(t, terraformOptions)
-			assert.NoError(t, planErr)
+			assert.NoError(t, planErr, "Algalon host disk configuration '%s' should plan successfully", tc.name)
 		})
 	}
 }

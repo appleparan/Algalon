@@ -56,10 +56,11 @@ func TestTerraformValidation(t *testing.T) {
 				Vars:         tc.vars,
 			})
 
-			// Validate Terraform configuration
+			// Initialize and validate using plan
+			// Plan includes validation and works with variables
 			terraform.Init(t, terraformOptions)
-			_, validationErr := terraform.ValidateE(t, terraformOptions)
-			assert.NoError(t, validationErr)
+			_, planErr := terraform.PlanE(t, terraformOptions)
+			assert.NoError(t, planErr, "Terraform plan should succeed (includes validation)")
 		})
 	}
 }
@@ -87,6 +88,10 @@ func TestTerraformFormat(t *testing.T) {
 			name: "Training Cluster Example",
 			path: "../../terraform/examples/training-cluster",
 		},
+		{
+			name: "Host-only Example",
+			path: "../../terraform/examples/host-only",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -94,15 +99,13 @@ func TestTerraformFormat(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+			// Check Terraform formatting (fmt -check)
+			_, formatErr := terraform.RunTerraformCommandE(t, &terraform.Options{
 				TerraformDir: tc.path,
 				NoColor:      true,
-			})
+			}, "fmt", "-check")
 
-			// Check Terraform formatting
-			terraform.Init(t, terraformOptions)
-			_, validationErr := terraform.ValidateE(t, terraformOptions)
-			assert.NoError(t, validationErr)
+			assert.NoError(t, formatErr, "Terraform files should be properly formatted")
 		})
 	}
 }

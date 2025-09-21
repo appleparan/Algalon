@@ -15,10 +15,12 @@ func TestNetworkModuleDefaults(t *testing.T) {
 		NoColor:      true,
 	})
 
-	// Test that the module initializes and validates correctly
+	// Test that the module initializes and validates correctly with defaults
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
+
+	// Use plan instead of validate to properly test with default values
+	_, planErr := terraform.PlanE(t, terraformOptions)
+	assert.NoError(t, planErr, "Network module should plan successfully with default values")
 }
 
 func TestNetworkModuleBasicPlan(t *testing.T) {
@@ -35,12 +37,10 @@ func TestNetworkModuleBasicPlan(t *testing.T) {
 	})
 
 	terraform.Init(t, terraformOptions)
-	_, validationErr := terraform.ValidateE(t, terraformOptions)
-	assert.NoError(t, validationErr)
 
-	// Test planning
+	// Test planning (includes validation)
 	_, planErr := terraform.PlanE(t, terraformOptions)
-	assert.NoError(t, planErr)
+	assert.NoError(t, planErr, "Network module should plan successfully with custom configuration")
 }
 
 func TestNetworkModuleCustomConfiguration(t *testing.T) {
@@ -98,12 +98,10 @@ func TestNetworkModuleCustomConfiguration(t *testing.T) {
 			})
 
 			terraform.Init(t, terraformOptions)
-			_, validationErr := terraform.ValidateE(t, terraformOptions)
-			assert.NoError(t, validationErr)
 
-			// Test planning
+			// Test planning (includes validation)
 			_, planErr := terraform.PlanE(t, terraformOptions)
-			assert.NoError(t, planErr)
+			assert.NoError(t, planErr, "Network module should plan successfully for %s", tc.name)
 		})
 	}
 }
