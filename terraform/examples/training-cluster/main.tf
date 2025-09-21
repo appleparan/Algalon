@@ -1,5 +1,7 @@
-# Basic Algalon deployment example
-# Creates a simple setup with one monitoring host and two worker nodes
+# Training Cluster Algalon deployment example
+# Creates a monitoring host and optionally worker nodes for ML/AI training
+# Default: host-only deployment (worker_count = 0)
+# For training: set worker_count > 0 to add GPU workers
 
 terraform {
   required_version = ">= 1.0"
@@ -29,8 +31,9 @@ module "network" {
   enable_external_victoria_metrics = var.enable_external_victoria_metrics
 }
 
-# Create worker instances
+# Create worker instances (only if worker_count > 0)
 module "workers" {
+  count  = var.worker_count > 0 ? 1 : 0
   source = "../../modules/algalon-worker"
 
   instance_name_prefix = "${var.deployment_name}-worker"
@@ -71,7 +74,7 @@ module "monitoring_host" {
   subnet_name   = module.network.subnet_name
 
   # Monitoring configuration
-  worker_targets   = module.workers.worker_targets
+  worker_targets   = var.worker_count > 0 ? module.workers[0].worker_targets : ""
   cluster_name     = var.cluster_name
   environment_name = var.environment_name
 

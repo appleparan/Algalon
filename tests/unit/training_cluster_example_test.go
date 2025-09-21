@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBasicExampleValidation(t *testing.T) {
+func TestTrainingClusterExampleValidation(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
+		TerraformDir: "../../terraform/examples/training-cluster",
 		NoColor:      true,
 		Vars: map[string]interface{}{
 			"project_id": "test-project-id",
@@ -24,11 +24,11 @@ func TestBasicExampleValidation(t *testing.T) {
 	assert.NoError(t, validationErr)
 }
 
-func TestBasicExamplePlan(t *testing.T) {
+func TestTrainingClusterExamplePlan(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
+		TerraformDir: "../../terraform/examples/training-cluster",
 		NoColor:      true,
 		Vars: map[string]interface{}{
 			"project_id": "test-project-123",
@@ -45,11 +45,11 @@ func TestBasicExamplePlan(t *testing.T) {
 	// or implement infrastructure tests after apply
 }
 
-func TestBasicExampleWithWorkers(t *testing.T) {
+func TestTrainingClusterExampleWithWorkers(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
+		TerraformDir: "../../terraform/examples/training-cluster",
 		NoColor:      true,
 		Vars: map[string]interface{}{
 			"project_id":               "test-project-123",
@@ -71,11 +71,11 @@ func TestBasicExampleWithWorkers(t *testing.T) {
 	assert.NoError(t, planErr)
 }
 
-func TestBasicExampleMinimal(t *testing.T) {
+func TestTrainingClusterExampleMinimal(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
+		TerraformDir: "../../terraform/examples/training-cluster",
 		NoColor:      true,
 		Vars: map[string]interface{}{
 			"project_id":    "test-project-minimal",

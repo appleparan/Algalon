@@ -49,14 +49,14 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive terraform/
 
-      - name: Terraform Init (Basic Example)
+      - name: Terraform Init (Training Cluster Example)
         run: |
-          cd terraform/examples/basic
+          cd terraform/examples/training-cluster
           terraform init -backend=false
 
-      - name: Terraform Validate (Basic Example)
+      - name: Terraform Validate (Training Cluster Example)
         run: |
-          cd terraform/examples/basic
+          cd terraform/examples/training-cluster
           terraform validate
 
       - name: Terraform Init (Host-only Example)

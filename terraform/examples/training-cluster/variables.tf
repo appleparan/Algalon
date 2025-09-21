@@ -73,9 +73,9 @@ variable "enable_external_victoria_metrics" {
 
 # Worker configuration
 variable "worker_count" {
-  description = "Number of worker instances (used to calculate total GPU count = worker_count * gpu_count)"
+  description = "Number of worker instances (used to calculate total GPU count = worker_count * gpu_count). Set to 0 for host-only deployment."
   type        = number
-  default     = 2
+  default     = 0
 }
 
 variable "worker_machine_type" {

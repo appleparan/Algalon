@@ -37,8 +37,8 @@ func TestTerraformValidation(t *testing.T) {
 			},
 		},
 		{
-			name: "Basic Example",
-			path: "../../terraform/examples/basic",
+			name: "Training Cluster Example",
+			path: "../../terraform/examples/training-cluster",
 			vars: map[string]interface{}{
 				"project_id": "test-project-123",
 			},
@@ -84,8 +84,8 @@ func TestTerraformFormat(t *testing.T) {
 			path: "../../terraform/modules/algalon-worker",
 		},
 		{
-			name: "Basic Example",
-			path: "../../terraform/examples/basic",
+			name: "Training Cluster Example",
+			path: "../../terraform/examples/training-cluster",
 		},
 	}
 
