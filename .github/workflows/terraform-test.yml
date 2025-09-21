@@ -155,13 +155,13 @@ jobs:
           # Generate documentation for terraform modules only
           for module in terraform/modules/*/; do
             echo "Checking docs for $module"
-            terraform-docs markdown table --output-file README.md --output-mode inject "$module"
+            terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$module"
           done
 
           # Generate documentation for terraform examples
           for example in terraform/examples/*/; do
             echo "Checking docs for $example"
-            terraform-docs markdown table --output-file README.md --output-mode inject "$example"
+            terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$example"
           done
 
           # Check if any terraform directory documentation was modified
