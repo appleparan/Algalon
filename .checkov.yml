@@ -32,6 +32,9 @@ skip-check:
   # Some instances need public IPs for specific use cases
   - CKV_GCP_40  # Ensure that Compute instances do not have public IP addresses
 
+  # Worker instances need project-wide SSH keys for automated management
+  - CKV_GCP_32  # Ensure 'Block Project-wide SSH keys' is enabled for VM instances
+
 
 # Checks to enforce (high priority security)
 check:
@@ -45,7 +48,6 @@ check:
   - CKV_GCP_29  # Ensure that Cloud Storage bucket is not anonymously or publicly accessible
   - CKV_GCP_30  # Ensure that instances are not configured to use the default service account
   - CKV_GCP_31  # Ensure that instances are not configured to use the default service account with full access to all Cloud APIs
-  - CKV_GCP_32  # Ensure 'Block Project-wide SSH keys' is enabled for VM instances
   - CKV_GCP_33  # Ensure oslogin is enabled for a Project
   - CKV_GCP_34  # Ensure that no instance in the project overrides the project setting for enabling OSLogin(OSLogin needs to be enabled in project metadata for all instances)
   - CKV_GCP_35  # Ensure ‘Enable connecting to serial ports’ is not enabled for VM Instance

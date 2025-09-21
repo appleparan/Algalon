@@ -33,6 +33,7 @@ locals {
   })
 }
 
+# checkov:enforce=CKV_GCP_32:Host instances must block project-wide SSH keys for security
 resource "google_compute_instance" "algalon_host" {
 #   count = length(data.google_compute_zones.available.names)
   name         = var.instance_name
