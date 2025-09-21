@@ -52,7 +52,7 @@ jobs:
       - name: Terraform Init (Training Cluster Example)
         run: |
           cd terraform/examples/training-cluster
-          terraform init -backend=false
+          terraform init -backend=false -upgrade
 
       - name: Terraform Validate (Training Cluster Example)
         run: |
@@ -62,7 +62,7 @@ jobs:
       - name: Terraform Init (Host-only Example)
         run: |
           cd terraform/examples/host-only
-          terraform init -backend=false
+          terraform init -backend=false -upgrade
 
       - name: Terraform Validate (Host-only Example)
         run: |
@@ -74,7 +74,7 @@ jobs:
           for module in terraform/modules/*/; do
             echo "Validating $module"
             cd "$module"
-            terraform init -backend=false
+            terraform init -backend=false -upgrade
             terraform validate
             cd - > /dev/null
           done
