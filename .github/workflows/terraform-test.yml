@@ -170,9 +170,9 @@ jobs:
             echo "  ➡️  Initializing $module"
             (cd "$module" && terraform init -backend=false -upgrade)
 
-            # Generate docs immediately after init (use lockfile for accurate versions)
+            # Generate docs immediately after init (use constraint versions)
             echo "  ➡️  Generating docs for $module"
-            (cd "$module" && terraform-docs markdown table --output-file README.md --output-mode inject .)
+            (cd "$module" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject .)
 
             echo "  ✅ $module_name completed"
             echo ""
@@ -188,9 +188,9 @@ jobs:
             echo "  ➡️  Initializing $example"
             (cd "$example" && terraform init -backend=false -upgrade)
 
-            # Generate docs immediately after init (use lockfile for accurate versions)
+            # Generate docs immediately after init (use constraint versions)
             echo "  ➡️  Generating docs for $example"
-            (cd "$example" && terraform-docs markdown table --output-file README.md --output-mode inject .)
+            (cd "$example" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject .)
 
             echo "  ✅ $example_name completed"
             echo ""

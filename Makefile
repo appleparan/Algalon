@@ -199,7 +199,7 @@ docs: ## Generate documentation for all modules
 	for module in terraform/modules/*/; do \
 		module_name=$$(basename "$$module"); \
 		echo "📝 Processing module: $$module_name"; \
-		if (cd "$$module" && terraform-docs markdown table --output-file README.md --output-mode inject .); then \
+		if (cd "$$module" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject .); then \
 			echo "✅ $$module_name: Documentation generated successfully"; \
 		else \
 			echo "❌ $$module_name: Documentation generation failed"; \
@@ -224,7 +224,7 @@ docs-check: ## Check if documentation is up to date
 		module_name=$$(basename "$$module"); \
 		echo "📋 Checking module: $$module_name"; \
 		modules_checked=$$((modules_checked + 1)); \
-		(cd "$$module" && terraform-docs markdown table --output-file README.md --output-mode inject . >/dev/null 2>&1); \
+		(cd "$$module" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject . >/dev/null 2>&1); \
 		if [ -n "$$(git diff --name-only "$$module/README.md" 2>/dev/null)" ]; then \
 			echo "❌ $$module_name: Documentation is outdated"; \
 			modules_outdated=$$((modules_outdated + 1)); \
