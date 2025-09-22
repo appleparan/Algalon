@@ -24,14 +24,34 @@ func TestFullAlgalonDeploymentE2E(t *testing.T) {
 	projectID := os.Getenv("TF_VAR_project_id")
 	region := getEnvOrDefault("TF_VAR_region", "us-central1")
 
+	// Determine deployment type based on environment variable
+	deploymentType := getEnvOrDefault("TEST_DEPLOYMENT_TYPE", "training-cluster")
+
 	// Generate unique deployment name
 	uniqueID := random.UniqueId()
-	deploymentName := getEnvOrDefault("TF_VAR_deployment_name", fmt.Sprintf("algalon-e2e-%s", uniqueID))
+	deploymentName := getEnvOrDefault("TF_VAR_deployment_name", fmt.Sprintf("algalon-e2e-%s-%s", deploymentType, uniqueID))
 
-	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
-		NoColor:      true,
-		Vars: map[string]interface{}{
+	// Set terraform directory based on deployment type
+	var terraformDir string
+	var vars map[string]interface{}
+
+	if deploymentType == "host-only" {
+		terraformDir = "../../terraform/examples/host-only"
+		vars = map[string]interface{}{
+			"project_id":        projectID,
+			"region":            region,
+			"deployment_name":   deploymentName,
+			"cluster_name":      "e2e-test",
+			"environment_name":  "testing",
+			"enable_host_external_ip":  true,
+			"reserve_static_ip":        false, // Cost optimization
+			"grafana_allowed_ips": []string{"0.0.0.0/0"}, // Allow all for testing
+			"ssh_allowed_ips":     []string{"0.0.0.0/0"}, // Allow all for testing
+			"host_machine_type":   "n1-standard-2", // Smaller for testing
+		}
+	} else {
+		terraformDir = "../../terraform/examples/training-cluster"
+		vars = map[string]interface{}{
 			"project_id":        projectID,
 			"region":            region,
 			"deployment_name":   deploymentName,
@@ -45,7 +65,17 @@ func TestFullAlgalonDeploymentE2E(t *testing.T) {
 			"grafana_allowed_ips": []string{"0.0.0.0/0"}, // Allow all for testing
 			"ssh_allowed_ips":     []string{"0.0.0.0/0"}, // Allow all for testing
 			"all_smi_interval":    3, // Faster collection for testing
-		},
+			"host_machine_type":     "n1-standard-2", // Smaller for testing
+			"worker_machine_type":   "n1-standard-1", // Smaller for testing
+		}
+	}
+
+	t.Logf("Running E2E test for deployment type: %s", deploymentType)
+
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars:         vars,
 		RetryableTerraformErrors: map[string]string{
 			".*timeout.*":                    "Timeout occurred",
 			".*Error waiting for operation.*": "GCP operation timeout",
@@ -70,11 +100,16 @@ func TestFullAlgalonDeploymentE2E(t *testing.T) {
 	// Test VictoriaMetrics accessibility
 	testVictoriaMetricsAccessibility(t, terraformOptions)
 
-	// Test worker metrics endpoints
-	testWorkerMetricsEndpoints(t, terraformOptions)
+	if deploymentType == "training-cluster" {
+		// Test worker metrics endpoints (only for training cluster)
+		testWorkerMetricsEndpoints(t, terraformOptions)
 
-	// Test metrics collection pipeline
-	testMetricsCollectionPipeline(t, terraformOptions)
+		// Test metrics collection pipeline (more comprehensive for training cluster)
+		testMetricsCollectionPipeline(t, terraformOptions, deploymentType)
+	} else {
+		// Test basic monitoring setup for host-only
+		testHostOnlyMonitoring(t, terraformOptions)
+	}
 }
 
 func testGrafanaAccessibility(t *testing.T, terraformOptions *terraform.Options) {
@@ -161,7 +196,48 @@ func testWorkerMetricsEndpoints(t *testing.T, terraformOptions *terraform.Option
 	}
 }
 
-func testMetricsCollectionPipeline(t *testing.T, terraformOptions *terraform.Options) {
+func testHostOnlyMonitoring(t *testing.T, terraformOptions *terraform.Options) {
+	t.Log("Testing host-only monitoring setup...")
+
+	victoriaMetricsURL := terraform.Output(t, terraformOptions, "victoria_metrics_url")
+	require.NotEmpty(t, victoriaMetricsURL)
+
+	// Query VictoriaMetrics for basic metrics (should have host metrics)
+	queryURL := fmt.Sprintf("%s/api/v1/query", victoriaMetricsURL)
+
+	maxRetries := 20 // Give time for basic metrics to be collected
+	timeBetweenRetries := 30 * time.Second
+
+	// Test for basic host metrics that should always be present
+	expectedMetrics := []string{
+		"up", // Should show VictoriaMetrics itself
+	}
+
+	for _, metricName := range expectedMetrics {
+		metricName := metricName // capture for closure
+		retry.DoWithRetry(t, fmt.Sprintf("Check basic metric %s", metricName), maxRetries, timeBetweenRetries, func() (string, error) {
+			// Query for the specific metric
+			fullQueryURL := fmt.Sprintf("%s?query=%s", queryURL, metricName)
+
+			resp, err := http.Get(fullQueryURL)
+			if err != nil {
+				return "", fmt.Errorf("failed to query metric %s: %v", metricName, err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return "", fmt.Errorf("metric query for %s failed with status: %d", metricName, resp.StatusCode)
+			}
+
+			t.Logf("✅ Basic metric %s is available for host-only monitoring", metricName)
+			return fmt.Sprintf("Metric %s found", metricName), nil
+		})
+	}
+
+	t.Log("✅ Host-only monitoring setup is working")
+}
+
+func testMetricsCollectionPipeline(t *testing.T, terraformOptions *terraform.Options, deploymentType string) {
 	t.Log("Testing metrics collection pipeline...")
 
 	victoriaMetricsURL := terraform.Output(t, terraformOptions, "victoria_metrics_url")

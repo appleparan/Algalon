@@ -24,14 +24,34 @@ func TestBasicDeploymentIntegration(t *testing.T) {
 	projectID := os.Getenv("TF_VAR_project_id")
 	region := getEnvOrDefault("TF_VAR_region", "us-central1")
 
+	// Determine deployment type based on environment variable
+	deploymentType := getEnvOrDefault("TEST_DEPLOYMENT_TYPE", "training-cluster")
+
 	// Generate unique deployment name
 	uniqueID := random.UniqueId()
-	deploymentName := fmt.Sprintf("algalon-integration-%s", uniqueID)
+	deploymentName := fmt.Sprintf("algalon-integration-%s-%s", deploymentType, uniqueID)
 
-	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../../terraform/examples/basic",
-		NoColor:      true,
-		Vars: map[string]interface{}{
+	// Set terraform directory based on deployment type
+	var terraformDir string
+	var vars map[string]interface{}
+
+	if deploymentType == "host-only" {
+		terraformDir = "../../terraform/examples/host-only"
+		vars = map[string]interface{}{
+			"project_id":        projectID,
+			"region":            region,
+			"deployment_name":   deploymentName,
+			"cluster_name":      "integration-test",
+			"environment_name":  "testing",
+			"enable_host_external_ip":  true,
+			"reserve_static_ip":        false, // Cost optimization
+			"grafana_allowed_ips": []string{"0.0.0.0/0"}, // Allow all for testing
+			"ssh_allowed_ips":     []string{"0.0.0.0/0"}, // Allow all for testing
+			"host_machine_type":   "n1-standard-2", // Smaller for testing
+		}
+	} else {
+		terraformDir = "../../terraform/examples/training-cluster"
+		vars = map[string]interface{}{
 			"project_id":        projectID,
 			"region":            region,
 			"deployment_name":   deploymentName,
@@ -44,7 +64,17 @@ func TestBasicDeploymentIntegration(t *testing.T) {
 			"enable_worker_external_ip": false,
 			"grafana_allowed_ips": []string{"0.0.0.0/0"}, // Allow all for testing
 			"ssh_allowed_ips":     []string{"0.0.0.0/0"}, // Allow all for testing
-		},
+			"host_machine_type":     "n1-standard-2", // Smaller for testing
+			"worker_machine_type":   "n1-standard-1", // Smaller for testing
+		}
+	}
+
+	t.Logf("Running integration test for deployment type: %s", deploymentType)
+
+	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars:         vars,
 		RetryableTerraformErrors: map[string]string{
 			".*timeout.*":                    "Timeout occurred",
 			".*Error waiting for operation.*": "GCP operation timeout",
@@ -60,20 +90,19 @@ func TestBasicDeploymentIntegration(t *testing.T) {
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Test that infrastructure was created correctly
-	testInfrastructureCreation(t, terraformOptions, projectID, region)
+	testInfrastructureCreation(t, terraformOptions, projectID, region, deploymentType)
 
 	// Test network connectivity
-	testNetworkConnectivity(t, terraformOptions)
+	testNetworkConnectivity(t, terraformOptions, deploymentType)
 
 	// Test monitoring endpoints
-	testMonitoringEndpoints(t, terraformOptions)
+	testMonitoringEndpoints(t, terraformOptions, deploymentType)
 }
 
-func testInfrastructureCreation(t *testing.T, terraformOptions *terraform.Options, projectID, region string) {
+func testInfrastructureCreation(t *testing.T, terraformOptions *terraform.Options, projectID, region, deploymentType string) {
 	// Get outputs
 	networkName := terraform.Output(t, terraformOptions, "network_name")
 	monitoringHostIP := terraform.Output(t, terraformOptions, "monitoring_host_external_ip")
-	workerInternalIPs := terraform.OutputList(t, terraformOptions, "worker_internal_ips")
 
 	// Verify network was created
 	assert.NotEmpty(t, networkName)
@@ -84,65 +113,87 @@ func testInfrastructureCreation(t *testing.T, terraformOptions *terraform.Option
 	assert.NotEmpty(t, monitoringHostIP)
 	assert.Regexp(t, `^\d+\.\d+\.\d+\.\d+$`, monitoringHostIP)
 
-	// Verify workers were created
-	assert.Len(t, workerInternalIPs, 1)
-	for _, ip := range workerInternalIPs {
-		assert.Regexp(t, `^\d+\.\d+\.\d+\.\d+$`, ip)
-	}
-
 	// Verify instances exist in GCP
 	instances := gcp.GetInstancesInRegion(t, projectID, region)
 
-	var monitoringInstance, workerInstance *gcp.Instance
+	var monitoringInstance *gcp.Instance
+	var workerInstances []*gcp.Instance
+
 	for _, instance := range instances {
 		if instance.Labels["component"] == "algalon-host" {
 			monitoringInstance = instance
 		}
 		if instance.Labels["component"] == "algalon-worker" {
-			workerInstance = instance
+			workerInstances = append(workerInstances, instance)
 		}
 	}
 
 	require.NotNil(t, monitoringInstance, "Monitoring instance should exist")
-	require.NotNil(t, workerInstance, "Worker instance should exist")
 
-	// Verify instance labels
+	// Verify instance labels for monitoring host
 	assert.Equal(t, "integration-test", monitoringInstance.Labels["cluster"])
 	assert.Equal(t, "testing", monitoringInstance.Labels["environment"])
 	assert.Equal(t, "algalon-host", monitoringInstance.Labels["component"])
 
-	assert.Equal(t, "integration-test", workerInstance.Labels["cluster"])
-	assert.Equal(t, "testing", workerInstance.Labels["environment"])
-	assert.Equal(t, "algalon-worker", workerInstance.Labels["component"])
-}
+	if deploymentType == "training-cluster" {
+		// For training cluster, verify workers were created
+		workerInternalIPs := terraform.OutputList(t, terraformOptions, "worker_internal_ips")
+		assert.Len(t, workerInternalIPs, 1)
+		for _, ip := range workerInternalIPs {
+			assert.Regexp(t, `^\d+\.\d+\.\d+\.\d+$`, ip)
+		}
 
-func testNetworkConnectivity(t *testing.T, terraformOptions *terraform.Options) {
-	// Test that instances are in the correct network and can communicate
-	monitoringHostIP := terraform.Output(t, terraformOptions, "monitoring_host_internal_ip")
-	workerInternalIPs := terraform.OutputList(t, terraformOptions, "worker_internal_ips")
+		require.Len(t, workerInstances, 1, "Worker instances should exist for training cluster")
 
-	assert.NotEmpty(t, monitoringHostIP)
-	assert.NotEmpty(t, workerInternalIPs)
-
-	// Verify IPs are in the expected subnet range (10.1.x.x)
-	assert.Regexp(t, `^10\.1\.\d+\.\d+$`, monitoringHostIP)
-	for _, ip := range workerInternalIPs {
-		assert.Regexp(t, `^10\.1\.\d+\.\d+$`, ip)
+		for _, workerInstance := range workerInstances {
+			assert.Equal(t, "integration-test", workerInstance.Labels["cluster"])
+			assert.Equal(t, "testing", workerInstance.Labels["environment"])
+			assert.Equal(t, "algalon-worker", workerInstance.Labels["component"])
+		}
+	} else {
+		// For host-only deployment, workers should not exist
+		assert.Len(t, workerInstances, 0, "No worker instances should exist for host-only deployment")
 	}
 }
 
-func testMonitoringEndpoints(t *testing.T, terraformOptions *terraform.Options) {
+func testNetworkConnectivity(t *testing.T, terraformOptions *terraform.Options, deploymentType string) {
+	// Test that instances are in the correct network and can communicate
+	monitoringHostIP := terraform.Output(t, terraformOptions, "monitoring_host_internal_ip")
+
+	assert.NotEmpty(t, monitoringHostIP)
+
+	if deploymentType == "training-cluster" {
+		// Verify IPs are in the expected subnet range (10.1.x.x for training cluster)
+		assert.Regexp(t, `^10\.1\.\d+\.\d+$`, monitoringHostIP)
+
+		workerInternalIPs := terraform.OutputList(t, terraformOptions, "worker_internal_ips")
+		assert.NotEmpty(t, workerInternalIPs)
+
+		for _, ip := range workerInternalIPs {
+			assert.Regexp(t, `^10\.1\.\d+\.\d+$`, ip)
+		}
+	} else {
+		// Verify IPs are in the expected subnet range (10.0.x.x for host-only)
+		assert.Regexp(t, `^10\.0\.\d+\.\d+$`, monitoringHostIP)
+	}
+}
+
+func testMonitoringEndpoints(t *testing.T, terraformOptions *terraform.Options, deploymentType string) {
 	// Get URLs
 	grafanaURL := terraform.Output(t, terraformOptions, "grafana_url")
 	victoriaMetricsURL := terraform.Output(t, terraformOptions, "victoria_metrics_url")
-	workerEndpoints := terraform.OutputList(t, terraformOptions, "worker_metrics_endpoints")
 
 	// Verify URLs are properly formatted
 	assert.Regexp(t, `^http://\d+\.\d+\.\d+\.\d+:3000$`, grafanaURL)
 	assert.Regexp(t, `^http://\d+\.\d+\.\d+\.\d+:8428$`, victoriaMetricsURL)
 
-	for _, endpoint := range workerEndpoints {
-		assert.Regexp(t, `^http://\d+\.\d+\.\d+\.\d+:9090/metrics$`, endpoint)
+	if deploymentType == "training-cluster" {
+		workerEndpoints := terraform.OutputList(t, terraformOptions, "worker_metrics_endpoints")
+		assert.NotEmpty(t, workerEndpoints, "Worker endpoints should exist for training cluster")
+
+		for _, endpoint := range workerEndpoints {
+			assert.Regexp(t, `^http://\d+\.\d+\.\d+\.\d+:9090/metrics$`, endpoint)
+		}
 	}
 
 	// Note: We don't test actual HTTP connectivity here because:

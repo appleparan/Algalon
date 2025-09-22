@@ -69,24 +69,105 @@ test-unit: ## Run unit tests
 	@echo "✅ Unit tests completed"
 
 test-integration: ## Run integration tests (requires GCP credentials)
-	@echo "Running integration tests..."
+	@echo "🧪 Running integration tests..."
+	@echo "=============================="
 	@if [ -z "$$TF_VAR_project_id" ]; then \
 		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
 		exit 1; \
 	fi
+	@echo "📋 Project ID: $$TF_VAR_project_id"
+	@echo "📋 Region: $${TF_VAR_region:-us-central1}"
+	@echo "📋 Test type: Integration (infrastructure creation/validation)"
+	@echo ""
 	@(cd tests/integration && go test -v -timeout 60m ./...)
 	@echo "✅ Integration tests completed"
 
 test-e2e: ## Run end-to-end tests (requires GCP credentials)
-	@echo "Running end-to-end tests..."
+	@echo "🚀 Running end-to-end tests..."
+	@echo "============================="
 	@if [ -z "$$TF_VAR_project_id" ]; then \
 		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
 		exit 1; \
 	fi
+	@echo "📋 Project ID: $$TF_VAR_project_id"
+	@echo "📋 Region: $${TF_VAR_region:-us-central1}"
+	@echo "📋 Test type: End-to-end (full deployment with service validation)"
+	@echo "⚠️  Note: E2E tests take 15-20 minutes and deploy real infrastructure"
+	@echo ""
 	@(cd tests/e2e && go test -v -timeout 120m ./...)
 	@echo "✅ End-to-end tests completed"
 
+test-integration-host: ## Run integration tests for host-only deployment
+	@echo "🏠 Running host-only integration tests..."
+	@echo "========================================"
+	@export TEST_DEPLOYMENT_TYPE=host-only && \
+	if [ -z "$$TF_VAR_project_id" ]; then \
+		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
+		exit 1; \
+	fi && \
+	echo "📋 Project ID: $$TF_VAR_project_id" && \
+	echo "📋 Test type: Host-only integration" && \
+	echo "" && \
+	(cd tests/integration && go test -v -timeout 60m -run TestBasicDeploymentIntegration ./...)
+	@echo "✅ Host-only integration tests completed"
+
+test-integration-cluster: ## Run integration tests for training cluster deployment
+	@echo "🎯 Running training cluster integration tests..."
+	@echo "=============================================="
+	@export TEST_DEPLOYMENT_TYPE=training-cluster && \
+	if [ -z "$$TF_VAR_project_id" ]; then \
+		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
+		exit 1; \
+	fi && \
+	echo "📋 Project ID: $$TF_VAR_project_id" && \
+	echo "📋 Test type: Training cluster integration" && \
+	echo "" && \
+	(cd tests/integration && go test -v -timeout 90m -run TestBasicDeploymentIntegration ./...)
+	@echo "✅ Training cluster integration tests completed"
+
+test-e2e-host: ## Run e2e tests for host-only deployment
+	@echo "🏠 Running host-only end-to-end tests..."
+	@echo "======================================="
+	@export TEST_DEPLOYMENT_TYPE=host-only && \
+	if [ -z "$$TF_VAR_project_id" ]; then \
+		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
+		exit 1; \
+	fi && \
+	echo "📋 Project ID: $$TF_VAR_project_id" && \
+	echo "📋 Test type: Host-only end-to-end" && \
+	echo "⚠️  Note: E2E tests take 10-15 minutes for host-only" && \
+	echo "" && \
+	(cd tests/e2e && go test -v -timeout 90m -run TestFullAlgalonDeploymentE2E ./...)
+	@echo "✅ Host-only end-to-end tests completed"
+
+test-e2e-cluster: ## Run e2e tests for training cluster deployment
+	@echo "🎯 Running training cluster end-to-end tests..."
+	@echo "=============================================="
+	@export TEST_DEPLOYMENT_TYPE=training-cluster && \
+	if [ -z "$$TF_VAR_project_id" ]; then \
+		echo "❌ TF_VAR_project_id environment variable is required"; \
+		echo "💡 Example: export TF_VAR_project_id=algalon-dev-test"; \
+		exit 1; \
+	fi && \
+	echo "📋 Project ID: $$TF_VAR_project_id" && \
+	echo "📋 Test type: Training cluster end-to-end" && \
+	echo "⚠️  Note: E2E tests take 15-20 minutes for full cluster" && \
+	echo "" && \
+	(cd tests/e2e && go test -v -timeout 120m -run TestFullAlgalonDeploymentE2E ./...)
+	@echo "✅ Training cluster end-to-end tests completed"
+
 test-all: test-unit test-integration test-e2e ## Run all test suites
+
+test-all-host: test-unit test-integration-host test-e2e-host ## Run all test suites for host-only deployment
+
+test-all-cluster: test-unit test-integration-cluster test-e2e-cluster ## Run all test suites for training cluster deployment
+
+test-quick: test-unit test-integration-host ## Run quick tests (unit + host-only integration)
 
 # Linting and security
 lint: ## Run TFLint on all Terraform files
