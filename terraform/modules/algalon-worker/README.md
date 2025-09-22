@@ -102,7 +102,7 @@ No modules.
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | ~> 7.3 |
+| <a name="provider_google"></a> [google](#provider\_google) | 7.3.0 |
 
 ## Modules
 

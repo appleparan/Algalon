@@ -143,6 +143,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
       - name: Setup terraform-docs
         run: |
           wget -O terraform-docs.tar.gz "https://github.com/terraform-docs/terraform-docs/releases/download/v${{ env.TERRAFORM_DOCS_VERSION }}/terraform-docs-v${{ env.TERRAFORM_DOCS_VERSION }}-linux-amd64.tar.gz"
@@ -150,17 +155,35 @@ jobs:
           chmod +x terraform-docs
           sudo mv terraform-docs /usr/local/bin/
 
+      - name: Initialize Terraform modules
+        run: |
+          # Initialize terraform modules
+          for module in terraform/modules/*/; do
+            echo "🔧 Initializing $module"
+            cd "$module"
+            terraform init -backend=false -upgrade
+            cd - > /dev/null
+          done
+
+          # Initialize terraform examples
+          for example in terraform/examples/*/; do
+            echo "🔧 Initializing $example"
+            cd "$example"
+            terraform init -backend=false -upgrade
+            cd - > /dev/null
+          done
+
       - name: Check Documentation
         run: |
           # Generate documentation for terraform modules only
           for module in terraform/modules/*/; do
-            echo "Checking docs for $module"
+            echo "📝 Checking docs for $module"
             terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$module"
           done
 
           # Generate documentation for terraform examples
           for example in terraform/examples/*/; do
-            echo "Checking docs for $example"
+            echo "📝 Checking docs for $example"
             terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$example"
           done
 
