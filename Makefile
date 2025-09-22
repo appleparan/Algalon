@@ -191,42 +191,139 @@ clean: ## Clean up temporary files and state
 	@echo "✅ Cleanup completed"
 
 # Development helpers
-dev-apply: ## Apply basic example for development (requires project_id)
-	@if [ -z "$$TF_VAR_project_id" ]; then \
-		echo "❌ TF_VAR_project_id environment variable is required"; \
-		echo "Example: export TF_VAR_project_id=my-gcp-project"; \
-		exit 1; \
-	fi
-	@echo "Applying basic example for development..."
+dev-host-plan: ## Plan host-only deployment for development
+	@echo "🏗️  Planning host-only development deployment..."
 	@(cd terraform/examples/host-only && \
 		terraform init && \
-		terraform apply -var="deployment_name=algalon-dev-$$USER" \
-		                -var="worker_count=1" \
-		                -var="use_preemptible_workers=true")
+		terraform plan \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER" \
+		-var="cluster_name=development" \
+		-var="environment_name=dev-host" \
+		-var="host_machine_type=n1-standard-2" \
+		-var="enable_host_external_ip=true" \
+		-var="reserve_static_ip=false")
 
-dev-destroy: ## Destroy development deployment
-	@echo "Destroying development deployment..."
-	@(cd terraform/examples/host-only && terraform destroy -auto-approve)
-
-dev-plan: ## Plan basic example for development
-	@if [ -z "$$TF_VAR_project_id" ]; then \
-		echo "❌ TF_VAR_project_id environment variable is required"; \
-		exit 1; \
-	fi
+dev-host-apply: ## Apply host-only deployment for development
+	@echo "🚀 Applying host-only development deployment..."
 	@(cd terraform/examples/host-only && \
-		terraform plan -var="deployment_name=algalon-dev-$$USER" \
-		               -var="worker_count=1" \
-		               -var="use_preemptible_workers=true")
+		terraform init && \
+		terraform apply -auto-approve \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER" \
+		-var="cluster_name=development" \
+		-var="environment_name=dev-host" \
+		-var="host_machine_type=n1-standard-2" \
+		-var="enable_host_external_ip=true" \
+		-var="reserve_static_ip=false")
+
+dev-host-destroy: ## Destroy host-only development deployment
+	@echo "💥 Destroying host-only development deployment..."
+	@(cd terraform/examples/host-only && \
+		terraform destroy -auto-approve \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER")
+
+dev-cluster-plan: ## Plan training cluster deployment for development
+	@echo "🏗️  Planning training cluster development deployment..."
+	@(cd terraform/examples/training-cluster && \
+		terraform init && \
+		terraform plan \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER" \
+		-var="cluster_name=development" \
+		-var="environment_name=dev-cluster" \
+		-var="worker_count=1" \
+		-var="gpu_type=nvidia-tesla-t4" \
+		-var="gpu_count=1" \
+		-var="use_preemptible_workers=true" \
+		-var="host_machine_type=n1-standard-2" \
+		-var="worker_machine_type=n1-standard-1" \
+		-var="reserve_static_ip=false")
+
+dev-cluster-apply: ## Apply training cluster deployment for development
+	@echo "🚀 Applying training cluster development deployment..."
+	@(cd terraform/examples/training-cluster && \
+		terraform init && \
+		terraform apply -auto-approve \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER" \
+		-var="cluster_name=development" \
+		-var="environment_name=dev-cluster" \
+		-var="worker_count=1" \
+		-var="gpu_type=nvidia-tesla-t4" \
+		-var="gpu_count=1" \
+		-var="use_preemptible_workers=true" \
+		-var="host_machine_type=n1-standard-2" \
+		-var="worker_machine_type=n1-standard-1" \
+		-var="reserve_static_ip=false")
+
+dev-cluster-destroy: ## Destroy training cluster development deployment
+	@echo "💥 Destroying training cluster development deployment..."
+	@(cd terraform/examples/training-cluster && \
+		terraform destroy -auto-approve \
+		-var="project_id=algalon-dev-test" \
+		-var="deployment_name=algalon-dev-$$USER")
+
+# Legacy dev commands for backward compatibility
+dev-plan: dev-host-plan ## Alias for dev-host-plan (backward compatibility)
+dev-apply: dev-host-apply ## Alias for dev-host-apply (backward compatibility)
+dev-destroy: dev-host-destroy ## Alias for dev-host-destroy (backward compatibility)
 
 # Examples
-example-basic: ## Show basic deployment example
-	@echo "Basic deployment example:"
-	@echo "export TF_VAR_project_id=your-gcp-project"
-	@echo "(cd terraform/examples/host-only && terraform init && terraform apply)"
+example-host: ## Show host-only deployment example
+	@echo "📋 Host-only deployment example:"
+	@echo "================================="
+	@echo "# Quick development deployment:"
+	@echo "make dev-host-apply"
+	@echo ""
+	@echo "# Manual deployment:"
+	@echo "cd terraform/examples/host-only"
+	@echo "terraform init"
+	@echo "terraform apply -var=\"project_id=your-gcp-project\""
+	@echo ""
+	@echo "# With custom variables:"
+	@echo "terraform apply \\"
+	@echo "  -var=\"project_id=your-gcp-project\" \\"
+	@echo "  -var=\"deployment_name=my-algalon\" \\"
+	@echo "  -var=\"cluster_name=production\""
 
-example-vars: ## Show example terraform.tfvars
-	@echo "Example terraform.tfvars:"
+example-cluster: ## Show training cluster deployment example
+	@echo "📋 Training cluster deployment example:"
+	@echo "======================================="
+	@echo "# Quick development deployment:"
+	@echo "make dev-cluster-apply"
+	@echo ""
+	@echo "# Manual deployment:"
+	@echo "cd terraform/examples/training-cluster"
+	@echo "terraform init"
+	@echo "terraform apply \\"
+	@echo "  -var=\"project_id=your-gcp-project\" \\"
+	@echo "  -var=\"worker_count=2\" \\"
+	@echo "  -var=\"gpu_type=nvidia-tesla-t4\""
+	@echo ""
+	@echo "# Production deployment:"
+	@echo "terraform apply \\"
+	@echo "  -var=\"project_id=your-gcp-project\" \\"
+	@echo "  -var=\"deployment_name=prod-algalon\" \\"
+	@echo "  -var=\"worker_count=4\" \\"
+	@echo "  -var=\"gpu_type=nvidia-tesla-v100\" \\"
+	@echo "  -var=\"use_preemptible_workers=false\" \\"
+	@echo "  -var=\"reserve_static_ip=true\""
+
+example-vars-host: ## Show example terraform.tfvars for host-only
+	@echo "📄 Example terraform.tfvars for host-only deployment:"
+	@echo "====================================================="
 	@cat terraform/examples/host-only/terraform.tfvars.example
+
+example-vars-cluster: ## Show example terraform.tfvars for training cluster
+	@echo "📄 Example terraform.tfvars for training cluster:"
+	@echo "================================================="
+	@cat terraform/examples/training-cluster/terraform.tfvars.example
+
+# Legacy example commands for backward compatibility
+example-basic: example-host ## Alias for example-host (backward compatibility)
+example-vars: example-vars-host ## Alias for example-vars-host (backward compatibility)
 
 # Status and info
 status: ## Show current status
