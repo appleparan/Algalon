@@ -155,48 +155,60 @@ jobs:
           chmod +x terraform-docs
           sudo mv terraform-docs /usr/local/bin/
 
-      - name: Initialize Terraform modules
+      - name: Initialize and Check Documentation
         run: |
-          # Initialize terraform modules
+          echo "🔧 Initializing Terraform and generating documentation..."
+          echo "======================================================="
+
+          # Process modules: init → docs for each module
+          echo "📁 Processing Terraform modules..."
           for module in terraform/modules/*/; do
-            echo "🔧 Initializing $module"
-            cd "$module"
-            terraform init -backend=false -upgrade
-            cd - > /dev/null
+            module_name=$(basename "$module")
+            echo "🔧 Processing module: $module_name"
+
+            # Initialize module
+            echo "  ➡️  Initializing $module"
+            (cd "$module" && terraform init -backend=false -upgrade)
+
+            # Generate docs immediately after init
+            echo "  ➡️  Generating docs for $module"
+            (cd "$module" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject .)
+
+            echo "  ✅ $module_name completed"
+            echo ""
           done
 
-          # Initialize terraform examples
+          # Process examples: init → docs for each example
+          echo "📁 Processing Terraform examples..."
           for example in terraform/examples/*/; do
-            echo "🔧 Initializing $example"
-            cd "$example"
-            terraform init -backend=false -upgrade
-            cd - > /dev/null
-          done
+            example_name=$(basename "$example")
+            echo "🔧 Processing example: $example_name"
 
-      - name: Check Documentation
-        run: |
-          # Generate documentation for terraform modules only
-          for module in terraform/modules/*/; do
-            echo "📝 Checking docs for $module"
-            terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$module"
-          done
+            # Initialize example
+            echo "  ➡️  Initializing $example"
+            (cd "$example" && terraform init -backend=false -upgrade)
 
-          # Generate documentation for terraform examples
-          for example in terraform/examples/*/; do
-            echo "📝 Checking docs for $example"
-            terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject "$example"
+            # Generate docs immediately after init
+            echo "  ➡️  Generating docs for $example"
+            (cd "$example" && terraform-docs markdown --lockfile=false table --output-file README.md --output-mode inject .)
+
+            echo "  ✅ $example_name completed"
+            echo ""
           done
 
           # Check if any terraform directory documentation was modified
+          echo "🔍 Checking for documentation changes..."
           terraform_changes=$(git diff --name-only | grep "^terraform/" || true)
           if [[ -n "$terraform_changes" ]]; then
             echo "❌ Terraform documentation is out of date. Please run terraform-docs and commit changes."
-            echo "Modified files:"
+            echo "📋 Modified files:"
             echo "$terraform_changes"
+            echo ""
+            echo "📋 Detailed changes:"
             git diff terraform/
             exit 1
           else
-            echo "✅ Terraform documentation is up to date."
+            echo "✅ All Terraform documentation is up to date!"
           fi
 
   unit-tests:
