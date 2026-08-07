@@ -1,12 +1,12 @@
 # Algalon Makefile — monitoring validation and deployment helpers
 
-.PHONY: help rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate helm-sync helm-validate
+.PHONY: help rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate helm-sync helm-validate e2e-k3d
 
 # Default target
 help: ## Show this help message
 	@echo "Algalon Commands"
 	@echo "================"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # Monitoring / alert rules
 VM_VERSION := v1.149.0
@@ -72,3 +72,9 @@ helm-validate: helm-sync ## Lint and schema-validate the Helm chart
 	@helm template algalon deploy/helm/algalon $(HELM_VALIDATE_SET) \
 		| docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_TAG) -strict -summary
 	@echo "✅ helm chart valid"
+
+# Not part of the validation gate: needs docker + k3d and takes minutes.
+# It answers the one question `helm-validate` cannot — does the deployed
+# pipeline actually evaluate rules and route alerts.
+e2e-k3d: ## Run k3d end-to-end smoke test
+	@bash tests/e2e/k3d-smoke.sh
