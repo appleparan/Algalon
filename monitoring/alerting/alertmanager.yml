@@ -1,0 +1,48 @@
+# Alertmanager routing policy (spec §5; Phase 1 carry-forward notes).
+# Single source: compose bind-mounts this file, Helm packages it.
+# Slack webhooks arrive as FILES (api_url_file) mounted from the
+# deployment's secrets dir — never inline URLs in this file.
+# repeat_interval 4h absorbs delta-window latching (GpuUncorrectableRowRemap
+# re-fires for ~10m per increase; grouping must not page repeatedly).
+route:
+  receiver: slack-warning
+  group_by: ['alertname', 'node']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Dead man's switch: always firing by design; never notify a human.
+    - matchers:
+        - alertname="Watchdog"
+      receiver: blackhole
+    - matchers:
+        - severity="critical"
+      receiver: slack-critical
+
+inhibit_rules:
+  # A critical alert on a node suppresses warnings on the same node —
+  # the page already covers it (spec §5). Alerts without a node label
+  # (Watchdog, cluster-wide) are not affected: empty label must match on
+  # both sides for inhibition to apply.
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['node']
+
+receivers:
+  - name: blackhole
+
+  - name: slack-critical
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_webhook_critical
+        send_resolved: true
+        title: '[CRITICAL] {{ .GroupLabels.alertname }} {{ if .GroupLabels.node }}on {{ .GroupLabels.node }}{{ end }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\n" }}{{ end }}'
+
+  - name: slack-warning
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_webhook_warning
+        send_resolved: true
+        title: '[WARN] {{ .GroupLabels.alertname }} {{ if .GroupLabels.node }}on {{ .GroupLabels.node }}{{ end }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\n" }}{{ end }}'
