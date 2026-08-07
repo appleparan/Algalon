@@ -1,0 +1,6 @@
+# all-smi API-mode targets (port 9090). Only for nodes running the optional
+# all-smi profile (cross-platform / process-level metrics).
+- targets:
+    - 'worker1.example.internal:9090'
+  labels:
+    node: worker1

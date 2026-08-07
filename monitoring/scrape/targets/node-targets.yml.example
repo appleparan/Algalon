@@ -1,0 +1,5 @@
+# node_exporter targets (port 9100). One entry per worker node.
+- targets:
+    - 'worker1.example.internal:9100'
+  labels:
+    node: worker1

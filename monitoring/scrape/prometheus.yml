@@ -1,0 +1,25 @@
+# vmagent scrape configuration (spec §3; 30s interval per Lablup Table 8).
+# Job names are contract: alert rules filter on job="dcgm" / job="node".
+# Target files are generated per deployment (compose: bind mount;
+# helm: ConfigMap) from the .example templates in scrape/targets/.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: dcgm
+    file_sd_configs:
+      - files:
+          - /etc/vmagent/targets/dcgm-targets.yml
+
+  - job_name: node
+    file_sd_configs:
+      - files:
+          - /etc/vmagent/targets/node-targets.yml
+
+  # Optional cross-platform exporter; targets file is empty unless the
+  # all-smi profile is enabled.
+  - job_name: all-smi
+    file_sd_configs:
+      - files:
+          - /etc/vmagent/targets/all-smi-targets.yml

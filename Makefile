@@ -446,3 +446,9 @@ rules-test: ## Run vmalert rule unit tests
 		victoriametrics/vmalert-tool:$(VM_VERSION) \
 		unittest -files='tests/rules/*.test.yml'
 	@echo "✅ rule unit tests passed"
+
+scrape-validate: ## Validate vmagent scrape config
+	@docker run --rm -v $(PWD)/monitoring/scrape:/scrape:ro \
+		victoriametrics/vmagent:$(VM_VERSION) \
+		-promscrape.config=/scrape/prometheus.yml -dryRun
+	@echo "✅ vmagent scrape config valid"
