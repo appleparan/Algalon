@@ -2,7 +2,10 @@
 
 **English** | [한국어](ko/architecture.md)
 
-![Algalon architecture](images/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/architecture-dark.svg">
+  <img alt="Algalon architecture" src="images/architecture.svg">
+</picture>
 
 Every GPU node runs a small set of exporters; a central host runs the
 storage, evaluation and alerting pipeline. Workers never push — the

@@ -12,7 +12,10 @@ VictoriaMetrics에 저장하고, 엄선된 여섯 개의 alert rule 그룹을 vm
 평가한 뒤 Alertmanager를 거쳐 Slack으로 라우팅하며, 전체 상황을 다섯 개의
 Grafana 대시보드로 보여줍니다.
 
-![Algalon 아키텍처](docs/images/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img alt="Algalon 아키텍처" src="docs/images/architecture.svg">
+</picture>
 
 ## Algalon이 만들어진 배경
 

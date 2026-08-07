@@ -2,7 +2,10 @@
 
 [English](../architecture.md) | **한국어**
 
-![Algalon 아키텍처](../images/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../images/architecture-dark.svg">
+  <img alt="Algalon 아키텍처" src="../images/architecture.svg">
+</picture>
 
 모든 GPU 노드는 소수의 exporter만 실행하고, 중앙 호스트가 저장·평가·알림
 파이프라인을 담당합니다. 워커가 데이터를 push하는 일은 없습니다. 중앙

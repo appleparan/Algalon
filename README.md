@@ -12,7 +12,10 @@ every GPU node, stores them in VictoriaMetrics, evaluates six curated
 alert rule groups with vmalert, routes the results through Alertmanager
 to Slack, and renders the whole picture in five Grafana dashboards.
 
-![Algalon architecture](docs/images/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img alt="Algalon architecture" src="docs/images/architecture.svg">
+</picture>
 
 ## Why Algalon exists
 
