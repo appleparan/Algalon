@@ -1,0 +1,5 @@
+# prometheus-slurm-exporter target (port 9092). One entry for the whole
+# cluster — run it on the slurmctld or a login node. Queue/partition state is
+# cluster-wide, so no `node` label applies here.
+- targets:
+    - 'slurmctld.example.internal:9092'

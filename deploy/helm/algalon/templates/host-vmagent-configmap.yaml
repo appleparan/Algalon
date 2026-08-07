@@ -39,4 +39,25 @@ data:
           # Every series is attributable to a node.
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
+      {{- if .Values.slurm.enabled }}
+      # Slurm exporters live outside the cluster, so kubernetes_sd cannot see
+      # them — they are enumerated statically from values.yaml instead.
+      # job slurm     = prometheus-slurm-exporter (one per cluster, :9092)
+      # job slurm-job = slurm-job-exporter (one per compute node, :9798)
+      # Each slurm-job entry carries the `node` label that joins its per-job
+      # series to the dcgm/node series of the same machine.
+      - job_name: slurm
+        static_configs:
+        {{- range .Values.slurm.queueTargets }}
+          - targets: [{{ . | quote }}]
+        {{- end }}
+
+      - job_name: slurm-job
+        static_configs:
+        {{- range .Values.slurm.jobTargets }}
+          - targets: [{{ .address | quote }}]
+            labels:
+              node: {{ .node | quote }}
+        {{- end }}
+      {{- end }}
 {{- end }}
