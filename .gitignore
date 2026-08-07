@@ -25,3 +25,6 @@ deploy/compose/host/secrets/*
 !deploy/compose/host/secrets/README.md
 deploy/compose/host/targets/*.yml
 deploy/compose/**/.env
+
+# Helm chart generated content (make helm-sync)
+deploy/helm/algalon/files/

@@ -1,7 +1,7 @@
 # Algalon Terraform Testing Makefile
 # Provides convenient commands for development and CI/CD
 
-.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate
+.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate helm-sync helm-validate
 
 # Default target
 help: ## Show this help message
@@ -434,6 +434,7 @@ deps: ## Install Go dependencies for tests
 
 # Monitoring / alert rules
 VM_VERSION := v1.149.0
+KUBECONFORM_TAG := v0.8.0
 
 rules-validate: ## Validate vmalert rule file syntax
 	@docker run --rm -v $(CURDIR)/monitoring/rules:/rules:ro \
@@ -477,3 +478,14 @@ dashboards-validate: ## Validate Grafana dashboard JSON conventions
 	uids=$$(jq -r '.uid' monitoring/dashboards/*.json | sort | uniq -d); \
 	test -z "$$uids" || { echo "duplicate uids: $$uids"; exit 1; }
 	@echo "✅ dashboards valid"
+
+helm-sync: ## Sync monitoring/ content into the Helm chart files/ dir (generated)
+	@mkdir -p deploy/helm/algalon/files
+	@rsync -a --delete monitoring/rules monitoring/dashboards monitoring/alerting monitoring/exporters deploy/helm/algalon/files/
+	@echo "✅ helm files synced"
+
+helm-validate: helm-sync ## Lint and schema-validate the Helm chart
+	@helm lint deploy/helm/algalon
+	@helm template algalon deploy/helm/algalon --set allSmi.enabled=true \
+		| docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_TAG) -strict -summary
+	@echo "✅ helm chart valid"
