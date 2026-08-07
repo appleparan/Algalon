@@ -1,0 +1,58 @@
+# Algalon worker stack: exporters scraped remotely by the host's vmagent.
+# GPU containers use the NVIDIA container runtime (nvidia-container-toolkit).
+# Non-NVIDIA nodes: run only node-exporter (and optionally all-smi):
+#   docker compose up -d node-exporter
+services:
+  # Failure-detection backbone: XID, ECC, remapped rows, thermal (spec §3).
+  # Publishes exactly the fields listed in monitoring/exporters/dcgm-counters.csv.
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.6.0-4.8.3-ubi9
+    container_name: algalon-dcgm-exporter
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "${DCGM_EXPORTER_PORT:-9400}:9400"
+    volumes:
+      - ../../../monitoring/exporters/dcgm-counters.csv:/etc/dcgm-exporter/counters.csv:ro
+    command: ["-f", "/etc/dcgm-exporter/counters.csv"]
+
+  # Precursor layer: interrupts, runnable procs, vmstat, NFS mountstats
+  # (spec §3). host network+pid so /proc reflects the node, not the
+  # container. --collector.mountstats is REQUIRED — without it the entire
+  # storage-nfs rule group is silently inert.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: algalon-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.mountstats'
+      - '--web.listen-address=:${NODE_EXPORTER_PORT:-9100}'
+
+  # Optional cross-platform / process-level exporter (spec §2: opt-in
+  # profile, pinned tag — never latest).
+  all-smi:
+    profiles: ["all-smi"]
+    image: ghcr.io/inureyes/all-smi:v0.25.0
+    container_name: algalon-all-smi
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "${ALL_SMI_PORT:-9090}:9090"
+    command: ["api", "--port", "9090", "--interval", "${ALL_SMI_INTERVAL:-5}", "--processes"]

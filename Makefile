@@ -1,7 +1,7 @@
 # Algalon Terraform Testing Makefile
 # Provides convenient commands for development and CI/CD
 
-.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate
+.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate alertmanager-validate compose-validate
 
 # Default target
 help: ## Show this help message
@@ -452,3 +452,15 @@ scrape-validate: ## Validate vmagent scrape config
 		victoriametrics/vmagent:$(VM_VERSION) \
 		-promscrape.config=/scrape/prometheus.yml -dryRun
 	@echo "✅ vmagent scrape config valid"
+
+alertmanager-validate: ## Validate Alertmanager routing config
+	@docker run --rm -v $(CURDIR)/monitoring/alerting:/config:ro \
+		--entrypoint /bin/amtool prom/alertmanager:v0.33.1 \
+		check-config /config/alertmanager.yml
+	@echo "✅ alertmanager config valid"
+
+compose-validate: ## Validate compose stacks
+	@docker compose -f deploy/compose/worker/docker-compose.yml config -q
+	@docker compose -f deploy/compose/worker/docker-compose.yml --profile all-smi config -q
+	@docker compose -f deploy/compose/host/docker-compose.yml config -q
+	@echo "✅ compose stacks valid"

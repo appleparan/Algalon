@@ -19,3 +19,9 @@ algalon_worker/.env
 *.tfplan.*
 .terraformrc
 terraform.rc
+
+# Compose deployment-specific files (never commit)
+deploy/compose/host/secrets/*
+!deploy/compose/host/secrets/README.md
+deploy/compose/host/targets/*.yml
+deploy/compose/**/.env
