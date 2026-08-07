@@ -1,0 +1,58 @@
+# Peer-relative OS anomaly signals (spec §5.4, Lablup report §4.1.2).
+# Report finding F1: across 10 XID-tagged failures there was NO single
+# dominant precursor metric — so these are conservative warning-only
+# supporting signals, never critical pages.
+# Report Fig 2 (gpu071, NVLink+Bus Fault): interrupts fell from ~300K to
+# 70K-100K per 30s and runnable processes dropped to ~0 at the fault.
+# Report Fig 3 (gpu096, ECC): NFS GETATTR latency and page-out spiked at the
+# XID (the NFS side lives in storage-nfs.yml).
+# All rules compare a node against the cluster median (works at any cluster
+# size) and are gated on >=3 live node-exporter targets, below which a
+# median is meaningless.
+groups:
+  - name: node-precursor
+    interval: 30s
+    rules:
+      - alert: NodeInterruptRateCollapse
+        expr: >-
+          (
+            rate(node_intr_total[5m])
+              < scalar(0.5 * quantile(0.5, rate(node_intr_total[5m])))
+          )
+          and on() (count(up{job="node"} == 1) >= 3)
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Interrupt rate on {{ $labels.instance }} collapsed below half the cluster median'
+
+      - alert: NodeRunnableProcsCollapse
+        expr: >-
+          (
+            avg_over_time(node_procs_running[10m]) < 2
+            and on() (quantile(0.5, avg_over_time(node_procs_running[10m])) > 10)
+          )
+          and on() (count(up{job="node"} == 1) >= 3)
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Runnable processes on {{ $labels.instance }} collapsed to near zero while cluster median is above 10'
+
+      # +1 in the threshold keeps this quiet when the cluster median is ~0
+      # (idle cluster: any small page-out would otherwise be "4x median").
+      - alert: NodePageOutBurst
+        expr: >-
+          (
+            rate(node_vmstat_pgpgout[5m])
+              > scalar(4 * quantile(0.5, rate(node_vmstat_pgpgout[5m])) + 1)
+          )
+          and on() (count(up{job="node"} == 1) >= 3)
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Page-out rate on {{ $labels.instance }} is more than 4x the cluster median'

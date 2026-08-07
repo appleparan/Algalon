@@ -1,0 +1,94 @@
+rule_files:
+  - ../../monitoring/rules/node-precursor.yml
+
+evaluation_interval: 30s
+
+tests:
+  # worker3's interrupt rate collapses to 10% of peers -> warning
+  # w1/w2: +300000 per 30s sample (rate 10000/s).
+  # w3: same for 10m, then +30000 per sample (rate 1000/s) for 30m.
+  - interval: 30s
+    input_series:
+      - series: 'node_intr_total{instance="w1:9100"}'
+        values: '0+300000x80'
+      - series: 'node_intr_total{instance="w2:9100"}'
+        values: '0+300000x80'
+      - series: 'node_intr_total{instance="w3:9100"}'
+        values: '0+300000x20 6000000+30000x60'
+      - series: 'up{job="node", instance="w1:9100"}'
+        values: '1x80'
+      - series: 'up{job="node", instance="w2:9100"}'
+        values: '1x80'
+      - series: 'up{job="node", instance="w3:9100"}'
+        values: '1x80'
+    alert_rule_test:
+      - eval_time: 30m
+        groupname: node-precursor
+        alertname: NodeInterruptRateCollapse
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w3:9100
+            exp_annotations:
+              summary: 'Interrupt rate on w3:9100 collapsed below half the cluster median'
+      # Healthy peers do not fire
+      - eval_time: 8m
+        groupname: node-precursor
+        alertname: NodeInterruptRateCollapse
+        exp_alerts: []
+
+  # worker3's runnable process count drops to 0 while peers stay ~30
+  - interval: 30s
+    input_series:
+      - series: 'node_procs_running{instance="w1:9100"}'
+        values: '30x80'
+      - series: 'node_procs_running{instance="w2:9100"}'
+        values: '30x80'
+      - series: 'node_procs_running{instance="w3:9100"}'
+        values: '30x10 0x70'
+      - series: 'up{job="node", instance="w1:9100"}'
+        values: '1x80'
+      - series: 'up{job="node", instance="w2:9100"}'
+        values: '1x80'
+      - series: 'up{job="node", instance="w3:9100"}'
+        values: '1x80'
+    alert_rule_test:
+      - eval_time: 26m
+        groupname: node-precursor
+        alertname: NodeRunnableProcsCollapse
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w3:9100
+            exp_annotations:
+              summary: 'Runnable processes on w3:9100 collapsed to near zero while cluster median is above 10'
+
+  # worker3 page-out rate spikes to 40x the cluster median
+  # w1/w2: +3000 per sample (rate 100/s); w3 jumps to +120000 (rate 4000/s).
+  - interval: 30s
+    input_series:
+      - series: 'node_vmstat_pgpgout{instance="w1:9100"}'
+        values: '0+3000x60'
+      - series: 'node_vmstat_pgpgout{instance="w2:9100"}'
+        values: '0+3000x60'
+      - series: 'node_vmstat_pgpgout{instance="w3:9100"}'
+        values: '0+3000x20 60000+120000x40'
+      - series: 'up{job="node", instance="w1:9100"}'
+        values: '1x60'
+      - series: 'up{job="node", instance="w2:9100"}'
+        values: '1x60'
+      - series: 'up{job="node", instance="w3:9100"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 25m
+        groupname: node-precursor
+        alertname: NodePageOutBurst
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w3:9100
+            exp_annotations:
+              summary: 'Page-out rate on w3:9100 is more than 4x the cluster median'
