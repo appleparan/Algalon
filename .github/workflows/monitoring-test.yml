@@ -39,3 +39,6 @@ jobs:
 
       - name: Validate compose stacks
         run: make compose-validate
+
+      - name: Validate dashboards
+        run: make dashboards-validate

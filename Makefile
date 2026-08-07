@@ -1,7 +1,7 @@
 # Algalon Terraform Testing Makefile
 # Provides convenient commands for development and CI/CD
 
-.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate alertmanager-validate compose-validate
+.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate
 
 # Default target
 help: ## Show this help message
@@ -464,3 +464,16 @@ compose-validate: ## Validate compose stacks
 	@docker compose -f deploy/compose/worker/docker-compose.yml --profile all-smi config -q
 	@docker compose -f deploy/compose/host/docker-compose.yml config -q
 	@echo "✅ compose stacks valid"
+
+dashboards-validate: ## Validate Grafana dashboard JSON conventions
+	@set -e; for f in monitoring/dashboards/*.json; do \
+		jq -e '.uid | test("^algalon-")' "$$f" >/dev/null || { echo "$$f: bad uid"; exit 1; }; \
+		jq -e '.tags | index("algalon")' "$$f" >/dev/null || { echo "$$f: missing algalon tag"; exit 1; }; \
+		jq -e '.refresh == "30s"' "$$f" >/dev/null || { echo "$$f: refresh != 30s"; exit 1; }; \
+		jq -e '.templating.list | map(select(.type == "datasource")) | length >= 1' "$$f" >/dev/null || { echo "$$f: no datasource variable"; exit 1; }; \
+		jq -e '[.panels[] | select(.targets) | .targets[] | .datasource.uid] | all(. == "$${datasource}")' "$$f" >/dev/null || { echo "$$f: panel target not using \$${datasource}"; exit 1; }; \
+		jq -e '[.uid] as $$u | true' "$$f" >/dev/null; \
+	done; \
+	uids=$$(jq -r '.uid' monitoring/dashboards/*.json | sort | uniq -d); \
+	test -z "$$uids" || { echo "duplicate uids: $$uids"; exit 1; }
+	@echo "✅ dashboards valid"
