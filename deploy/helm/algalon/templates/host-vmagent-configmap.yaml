@@ -1,0 +1,42 @@
+{{- if .Values.host.enabled }}
+{{/*
+Kubernetes counterpart of monitoring/scrape/prometheus.yml. Compose enumerates
+targets from static files; here a single kubernetes_sd job discovers every
+opted-in worker pod and relabelling reconstructs the same label contract:
+  job  == dcgm | node | all-smi   (alert rules filter on it)
+  node == the node the pod runs on (Alertmanager groups on it)
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmagent
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmagent") | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: {{ .Values.vmagent.scrapeInterval }}
+      scrape_timeout: 10s
+
+    scrape_configs:
+      # One discovery job for all exporters; the job label is rewritten per pod
+      # so alert rules keep seeing job="dcgm" / job="node" / job="all-smi".
+      - job_name: algalon-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Opt-in: only pods labelled algalon.io/scrape=true are scraped.
+          - source_labels: [__meta_kubernetes_pod_label_algalon_io_scrape]
+            action: keep
+            regex: "true"
+          # Exactly one target per pod: every exporter names its port "metrics".
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: metrics
+          # Job-name contract, carried on the pod as algalon.io/job.
+          - source_labels: [__meta_kubernetes_pod_label_algalon_io_job]
+            target_label: job
+          # Every series is attributable to a node.
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+{{- end }}

@@ -1,0 +1,39 @@
+{{- if .Values.host.enabled }}
+{{/*
+kubernetes_sd (role: pod) needs cluster-wide read on pods; nodes are included
+so node metadata stays available if the discovery role is widened later.
+Read-only — no write verbs anywhere.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmagent
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmagent") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmagent
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmagent") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmagent
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmagent") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "algalon.fullname" . }}-vmagent
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "algalon.fullname" . }}-vmagent
+    namespace: {{ .Release.Namespace }}
+{{- end }}
