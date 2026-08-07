@@ -14,13 +14,19 @@ identical no matter how you run it.
 
 ## Local k3s cluster (recommended for on-prem)
 
-The design assumption is that your training workloads already run under
-Docker and should keep doing so. A k3s agent runs *alongside* Docker on
-each GPU node and schedules only the exporter DaemonSets — the two
-container stacks share no state (k3s ships its own embedded containerd),
-kubelet cannot see or evict Docker containers, and dcgm-exporter never
-requests `nvidia.com/gpu`, so it never competes with training jobs for
-GPU allocation.
+The design assumption is that your training workloads keep running on
+the host exactly as they do today — under Docker, under
+Apptainer/Singularity, or as bare processes — and Algalon must not
+disturb them. A k3s agent runs *alongside* whatever runtime each node
+uses and schedules only the exporter DaemonSets: it ships its own
+embedded containerd, so it shares no state with the host's container
+stack; the kubelet cannot see or evict host workloads; and
+dcgm-exporter never requests `nvidia.com/gpu`, so it never competes
+with training jobs for GPU allocation. Docker gets the most attention
+in the runbook only because it is the one runtime that also writes
+iptables rules — exactly what the preflight script checks. Daemonless
+runtimes like Apptainer share even less with k3s and need no special
+handling.
 
 What you gain over hand-managed Compose stacks: adding a node is one
 `curl` command (the DaemonSets and scrape discovery pick it up

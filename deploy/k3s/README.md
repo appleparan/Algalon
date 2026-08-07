@@ -14,11 +14,18 @@ Both installers **refuse to run when k3s is already installed** — there is
 no `--force`. Removing a cluster is a deliberate manual step; see
 [Rollback](#rollback).
 
-## Why k3s can sit next to Docker training workloads
+## Why k3s can sit next to your training workloads
 
-GPU nodes keep running their training jobs under Docker. The k3s agent
-runs *alongside* Docker and only schedules the exporter DaemonSets. The
-two container stacks do not share state:
+GPU nodes keep running their training jobs with whatever runtime the
+site uses — Docker, Apptainer/Singularity, or bare processes. The k3s
+agent runs *alongside* that runtime and only schedules the exporter
+DaemonSets. The premise is not "the cluster runs Docker"; it is "the
+host workload must not be disturbed". Docker is simply the runtime that
+needs the closest look, because it is the only one that also writes
+iptables rules; daemonless runtimes like Apptainer share even less with
+k3s (no daemon, no network rules) and Slurm's cgroup accounting captures
+their jobs the same way. The k3s agent and the host runtime do not share
+state:
 
 - The agent ships its **own embedded containerd** with its own socket
   (`/run/k3s/containerd/containerd.sock`), its own state directory

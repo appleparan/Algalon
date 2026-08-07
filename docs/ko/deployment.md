@@ -14,12 +14,17 @@ Algalon은 세 가지 배포 방식을 제공합니다. 세 방식 모두 동일
 
 ## 로컬 k3s 클러스터 (온프레미스 권장)
 
-설계의 전제는 학습 워크로드가 이미 Docker에서 돌고 있고 앞으로도 그대로
-두어야 한다는 것입니다. 각 GPU 노드에서 k3s agent가 Docker와 *나란히*
-동작하면서 exporter DaemonSet만 스케줄링합니다. 두 컨테이너 스택은 상태를
-공유하지 않고(k3s는 자체 containerd를 내장합니다), kubelet은 Docker
-컨테이너를 보거나 evict할 수 없으며, dcgm-exporter는 `nvidia.com/gpu`를
-요청하지 않기 때문에 학습 잡과 GPU 할당을 두고 경쟁하지 않습니다.
+설계의 전제는 학습 워크로드가 지금 돌던 방식 그대로 — Docker든
+Apptainer/Singularity든 베어 프로세스든 — 호스트에서 계속 돌고, Algalon이
+이를 절대 건드리지 않는다는 것입니다. k3s agent는 각 노드가 어떤 런타임을
+쓰든 그 *옆에서* 동작하며 exporter DaemonSet만 스케줄링합니다. k3s는 자체
+containerd를 내장하므로 호스트 컨테이너 스택과 상태를 공유하지 않고,
+kubelet은 호스트 워크로드를 보거나 evict할 수 없으며, dcgm-exporter는
+`nvidia.com/gpu`를 요청하지 않기 때문에 학습 잡과 GPU 할당을 두고 경쟁하지
+않습니다. 런북에서 Docker를 가장 비중 있게 다루는 이유는 전제라서가 아니라,
+iptables를 함께 만지는 유일한 런타임이기 때문입니다 — preflight 스크립트가
+검사하는 게 바로 그 지점입니다. Apptainer처럼 데몬 없는 런타임은 k3s와
+공유하는 것이 더 적어 별도 고려가 필요 없습니다.
 
 직접 관리하는 Compose 스택 대비 얻는 것: 노드 추가가 `curl` 한 줄이면
 끝나고(DaemonSet과 scrape 디스커버리가 알아서 잡아냅니다), 업그레이드는
