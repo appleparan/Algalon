@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'monitoring/**'
+      - 'deploy/compose/**'
       - 'tests/rules/**'
       - 'Makefile'
       - '.github/workflows/monitoring-test.yml'
   pull_request:
     paths:
       - 'monitoring/**'
+      - 'deploy/compose/**'
       - 'tests/rules/**'
       - 'Makefile'
       - '.github/workflows/monitoring-test.yml'
@@ -31,3 +33,9 @@ jobs:
 
       - name: Validate vmagent scrape config
         run: make scrape-validate
+
+      - name: Validate Alertmanager config
+        run: make alertmanager-validate
+
+      - name: Validate compose stacks
+        run: make compose-validate

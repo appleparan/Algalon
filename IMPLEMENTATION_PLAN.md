@@ -9,7 +9,7 @@
 |---|---|---|
 | 0. Spec + AGENTS.md rewrite | (spec §8) | ✅ done |
 | 1. `monitoring/` single source (6 rule groups, scrape config, dcgm CSV, rule tests, CI) | `docs/superpowers/plans/2026-08-07-alert-center-phase1-monitoring.md` | ✅ done |
-| 2. Compose stacks (`deploy/compose/{worker,host}`) | not yet planned | ⬜ |
+| 2. Compose stacks (`deploy/compose/{worker,host}`) | `docs/superpowers/plans/2026-08-07-alert-center-phase2-compose.md` | ✅ done |
 | 3. Dashboards | not yet planned | ⬜ |
 | 4. Helm chart | not yet planned | ⬜ |
 | 5. Terraform migration + legacy removal | not yet planned | ⬜ |
@@ -31,6 +31,11 @@
   `checkpoint_load_phase` series means "unknown", not "not loading".
 - **Future**: peer-relative `scalar()` guards assume a homogeneous fleet;
   revisit with `by(...)` grouping for mixed hardware.
+- **Phase 5 (CI, deferred by decision)**: `terraform-test.yml` Cost Estimation
+  job fails on any PR touching `tests/**` — it `cd`s into the nonexistent
+  `terraform/examples/basic` (real examples: `host-only`, `training-cluster`).
+  Pre-existing bug surfaced by PR #1; fix the path and narrow the `tests/**`
+  trigger to `tests/{unit,integration,e2e}/**` during the terraform migration.
 
 Before removing this file, record a summary (stages, key decisions,
 verification results) in the PR.
