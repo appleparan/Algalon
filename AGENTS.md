@@ -3,7 +3,7 @@
 Multi-platform GPU cluster monitoring and **alert center**: DCGM-exporter +
 node_exporter (+ optional all-smi) → VMAgent → VictoriaMetrics → vmalert →
 Alertmanager → Slack, with Grafana dashboards. Deployable via Docker Compose,
-Helm, and Terraform (GCP).
+Helm, and local k3s clusters (`deploy/k3s/`, recommended for on-prem).
 
 Design rationale and full architecture:
 `docs/superpowers/specs/2026-08-07-alert-center-design.md`. Alert rules encode
@@ -30,10 +30,8 @@ analysis).
   exporter configs, scrape templates
 - `deploy/compose/{host,worker}` — Docker Compose stacks
 - `deploy/helm/algalon` — Helm chart (worker DaemonSets + host stack)
-- `deploy/terraform/` — GCP modules and examples
-- `tests/` — rule validation, compose/helm/terraform checks
-- Legacy `algalon_host/`, `algalon_worker/`, `terraform/` remain until the
-  redesign phases complete (see spec §8), then are removed.
+- `deploy/k3s/` — k3s bootstrap scripts and runbook for on-prem clusters
+- `tests/rules/` — vmalert rule unit tests
 
 ## Gotchas
 
@@ -58,9 +56,12 @@ analysis).
 
 ## Verification
 
-- Rules: `vmalert -dryRun` + promtool syntax check
+- Rules: `vmalert -dryRun` + rule unit tests
+- Scrape config: `vmagent -promscrape.config -dryRun`
 - Compose: `docker compose config` (both stacks, with and without profiles)
+- Alertmanager: `amtool check-config`
+- Dashboards: jq convention checks
 - Helm: `helm lint` && `helm template | kubeconform`
-- Terraform: `terraform fmt -check` && `terraform validate`
+- E2E: `make e2e-k3d`
 
 Run the checks for every layer a change touches before committing.
