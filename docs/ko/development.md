@@ -37,7 +37,7 @@ vmalert rule 그룹은 `vmalert-tool unittest`로 테스트합니다(`tests/rule
 ## 엔드투엔드 스모크 테스트
 
 `make e2e-k3d`는 일회용 k3d 클러스터에 파이프라인 전체를 띄우고 네 가지를
-확인합니다. 여섯 개 rule 그룹이 vmalert에 모두 로드되었는지, Watchdog
+확인합니다. 여섯 개 핵심 rule 그룹이 vmalert에 모두 로드되었는지, Watchdog
 알림이 Alertmanager까지 도달하는지(알림 경로가 끝까지 살아 있다는 증거),
 Kubernetes 서비스 디스커버리를 통한 노드 scrape이 동작하는지, 그리고 GPU
 전용 DaemonSet이 GPU 없는 노드에서 의도대로 스케줄되지 않고 남아 있는지를

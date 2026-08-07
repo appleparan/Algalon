@@ -21,16 +21,16 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | all-smi *(선택)* | 크로스 플랫폼 가속기 및 프로세스 단위 뷰 |
 | vmagent | exporter를 scrape해 VictoriaMetrics로 remote-write |
 | VictoriaMetrics | 시계열 저장소 |
-| vmalert | 여섯 개 rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
+| vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
-| Grafana | 자동 프로비저닝되는 다섯 개 대시보드 |
+| Grafana | 자동 프로비저닝되는 일곱 개 대시보드 |
 
 rule, 대시보드, scrape 설정, Alertmanager 정책, DCGM 카운터 세트의 단일
 진실 공급원은 `monitoring/` 디렉터리입니다. Docker Compose는 이 디렉터리를
 bind-mount하고 Helm은 ConfigMap으로 패키징합니다. `deploy/` 아래로 복사되는
 파일은 하나도 없습니다.
 
-## 여섯 개의 rule 그룹
+## 여섯 개의 핵심 rule 그룹
 
 `monitoring/rules/`의 각 그룹은 Lablup 리포트의 분석 결과 하나씩을 구현하며,
 모든 rule에는 근거가 된 절·표·그림 번호가 인라인 인용으로 달려 있습니다.
@@ -91,6 +91,9 @@ exporter down 알림, "타깃은 살아 있는데 DCGM만 조용한" 상황을 �
 여섯 그룹 전체에 대한 rule 유닛 테스트는 `tests/rules/`에 있고, GPU 하드웨어
 없이 실행됩니다.
 
+Slurm 통합을 켜면 큐·잡 accounting 알림을 담은 선택적 일곱 번째 그룹
+(`slurm`)이 추가됩니다 — [Slurm 통합](slurm.md)을 참고하세요.
+
 ## 알림 정책
 
 Alertmanager는 `severity="critical"`과 `severity="warning"`을 서로 다른
@@ -101,7 +104,7 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
 
 ## 대시보드
 
-`monitoring/dashboards/`의 Grafana 대시보드 다섯 개가 **Algalon** 폴더로
+`monitoring/dashboards/`의 Grafana 대시보드 일곱 개가 **Algalon** 폴더로
 자동 프로비저닝됩니다.
 
 - **Alert Center** — 지금 발생 중인 알림을 severity와 노드별로 보여주고,
@@ -116,3 +119,5 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
   Fig 5를 재현합니다.
 - **all-smi (Optional)** — 크로스 플랫폼 하드웨어 뷰. all-smi 프로파일을
   켰을 때만 데이터가 채워집니다.
+- **Slurm Queue / Slurm Job Explorer** — 큐 상태와 잡별 accounting 뷰.
+  [Slurm 통합](slurm.md)을 구성했을 때만 데이터가 채워집니다.
