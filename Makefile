@@ -436,19 +436,19 @@ deps: ## Install Go dependencies for tests
 VM_VERSION := v1.149.0
 
 rules-validate: ## Validate vmalert rule file syntax
-	@docker run --rm -v $(PWD)/monitoring/rules:/rules:ro \
+	@docker run --rm -v $(CURDIR)/monitoring/rules:/rules:ro \
 		victoriametrics/vmalert:$(VM_VERSION) \
-		-rule=/rules/*.yml -datasource.url=http://localhost:8428 -dryRun
+		-rule='/rules/*.yml' -datasource.url=http://localhost:8428 -dryRun
 	@echo "✅ vmalert rules valid"
 
 rules-test: ## Run vmalert rule unit tests
-	@docker run --rm -v $(PWD):/repo:ro -w /repo \
+	@docker run --rm -v $(CURDIR):/repo:ro -w /repo \
 		victoriametrics/vmalert-tool:$(VM_VERSION) \
 		unittest -files='tests/rules/*.test.yml'
 	@echo "✅ rule unit tests passed"
 
 scrape-validate: ## Validate vmagent scrape config
-	@docker run --rm -v $(PWD)/monitoring/scrape:/scrape:ro \
+	@docker run --rm -v $(CURDIR)/monitoring/scrape:/scrape:ro \
 		victoriametrics/vmagent:$(VM_VERSION) \
 		-promscrape.config=/scrape/prometheus.yml -dryRun
 	@echo "✅ vmagent scrape config valid"
