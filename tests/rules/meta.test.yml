@@ -36,6 +36,19 @@ tests:
             exp_annotations:
               summary: 'dcgm targets are up but no DCGM metrics are being published'
 
+  # Guard clause: no live dcgm targets means this is not a GPU cluster (or the
+  # exporter is down, which ExporterDown already covers), so the absent() check
+  # must stay silent instead of alerting on every non-NVIDIA deployment.
+  - interval: 30s
+    input_series:
+      - series: 'up{job="dcgm", instance="worker1:9400"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: meta
+        alertname: DcgmMetricsMissing
+        exp_alerts: []
+
   # Watchdog always fires
   - interval: 30s
     input_series: []
