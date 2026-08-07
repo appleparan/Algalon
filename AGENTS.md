@@ -30,10 +30,8 @@ analysis).
   exporter configs, scrape templates
 - `deploy/compose/{host,worker}` — Docker Compose stacks
 - `deploy/helm/algalon` — Helm chart (worker DaemonSets + host stack)
-- `deploy/terraform/` — GCP modules and examples
-- `tests/` — rule validation, compose/helm/terraform checks
-- Legacy `algalon_host/`, `algalon_worker/`, `terraform/` remain until the
-  redesign phases complete (see spec §8), then are removed.
+- `deploy/k3s/` — k3s bootstrap scripts and runbook for on-prem clusters
+- `tests/rules/` — vmalert rule unit tests
 
 ## Gotchas
 
