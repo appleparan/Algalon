@@ -10,7 +10,7 @@
 | 0. Spec + AGENTS.md rewrite | (spec §8) | ✅ done |
 | 1. `monitoring/` single source (6 rule groups, scrape config, dcgm CSV, rule tests, CI) | `docs/superpowers/plans/2026-08-07-alert-center-phase1-monitoring.md` | ✅ done |
 | 2. Compose stacks (`deploy/compose/{worker,host}`) | `docs/superpowers/plans/2026-08-07-alert-center-phase2-compose.md` | ✅ done |
-| 3. Dashboards | not yet planned | ⬜ |
+| 3. Dashboards | `docs/superpowers/plans/2026-08-07-alert-center-phase3-dashboards.md` | ✅ done |
 | 4. Helm chart | not yet planned | ⬜ |
 | 5. Terraform migration + legacy removal | not yet planned | ⬜ |
 

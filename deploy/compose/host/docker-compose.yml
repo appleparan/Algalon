@@ -75,6 +75,9 @@ services:
     networks:
       - monitoring
 
+  # Datasource + dashboard providers come from ./grafana/provisioning; the
+  # dashboard JSON itself is bind-mounted from monitoring/dashboards/ so the
+  # repo stays the single source of truth (see the algalon file provider).
   grafana:
     image: grafana/grafana:13.1.3
     container_name: algalon-grafana
@@ -86,6 +89,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../../monitoring/dashboards:/var/lib/grafana/dashboards/algalon:ro
       - grafanadata:/var/lib/grafana
     networks:
       - monitoring
