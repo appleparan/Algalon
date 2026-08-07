@@ -1,0 +1,55 @@
+{{- if .Values.host.enabled }}
+{{/*
+Scrapes discovered worker pods and remote-writes into VictoriaMetrics.
+Stateless — the remote-write buffer is a short-lived on-disk queue, so a
+plain Deployment is enough. The config checksum forces a rollout whenever
+the scrape config changes.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmagent
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmagent") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "vmagent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "vmagent") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/host-vmagent-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "algalon.fullname" . }}-vmagent
+      containers:
+        - name: vmagent
+          image: {{ .Values.vmagent.image }}
+          args:
+            - "--promscrape.config=/etc/vmagent/prometheus.yml"
+            - "--remoteWrite.url=http://{{ include "algalon.fullname" . }}-victoriametrics:8428/api/v1/write"
+          ports:
+            - name: http
+              containerPort: 8429
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8429
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmagent
+              readOnly: true
+          {{- with .Values.vmagent.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "algalon.fullname" . }}-vmagent
+{{- end }}

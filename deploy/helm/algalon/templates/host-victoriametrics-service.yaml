@@ -1,0 +1,22 @@
+{{- if .Values.host.enabled }}
+{{/*
+Stable in-cluster endpoint. The DNS name <fullname>-victoriametrics:8428 is
+a contract: vmagent remoteWrite, vmalert datasource/remoteRead/remoteWrite
+and the Grafana datasource all point at it.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algalon.fullname" . }}-victoriametrics
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "victoriametrics") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8428
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victoriametrics") | nindent 4 }}
+{{- end }}

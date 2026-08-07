@@ -6,6 +6,7 @@ on:
     paths:
       - 'monitoring/**'
       - 'deploy/compose/**'
+      - 'deploy/helm/**'
       - 'tests/rules/**'
       - 'Makefile'
       - '.github/workflows/monitoring-test.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'monitoring/**'
       - 'deploy/compose/**'
+      - 'deploy/helm/**'
       - 'tests/rules/**'
       - 'Makefile'
       - '.github/workflows/monitoring-test.yml'
@@ -42,3 +44,6 @@ jobs:
 
       - name: Validate dashboards
         run: make dashboards-validate
+
+      - name: Validate helm chart
+        run: make helm-validate

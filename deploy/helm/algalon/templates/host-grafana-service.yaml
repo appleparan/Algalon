@@ -1,0 +1,22 @@
+{{- if .Values.host.enabled }}
+{{/*
+UI endpoint. ClusterIP by design — no Ingress or LoadBalancer is shipped;
+reach it with `kubectl port-forward svc/<fullname>-grafana 3000:3000` or
+put your own Ingress in front.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algalon.fullname" . }}-grafana
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "grafana") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "grafana") | nindent 4 }}
+{{- end }}

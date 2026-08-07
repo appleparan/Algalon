@@ -1,0 +1,74 @@
+{{- if .Values.nodeExporter.enabled }}
+{{/*
+Precursor layer: interrupts, runnable procs, vmstat, NFS mountstats
+(spec §3). hostNetwork + hostPID so /proc reflects the node, not the
+container. --collector.mountstats is REQUIRED — without it the entire
+storage-nfs rule group is silently inert.
+*/}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "algalon.fullname" . }}-node-exporter
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "node-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "node-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "node-exporter") | nindent 8 }}
+        algalon.io/scrape: "true"
+        algalon.io/job: node
+    spec:
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- with .Values.nodeExporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeExporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: node-exporter
+          image: {{ .Values.nodeExporter.image }}
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --path.rootfs=/rootfs
+            - --collector.mountstats
+            - --web.listen-address=:{{ .Values.nodeExporter.port }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.nodeExporter.port }}
+              hostPort: {{ .Values.nodeExporter.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+          {{- with .Values.nodeExporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: rootfs
+          hostPath:
+            path: /
+{{- end }}

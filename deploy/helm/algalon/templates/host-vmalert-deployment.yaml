@@ -1,0 +1,59 @@
+{{- if .Values.host.enabled }}
+{{/*
+Rule evaluation (spec §4). Stateless: alert state is restored from
+VictoriaMetrics through --remoteRead.url and recording-rule results are
+written back through --remoteWrite.url, so a restart loses nothing.
+The rules checksum forces a rollout whenever a rule file changes.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmalert
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmalert") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "vmalert") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "vmalert") | nindent 8 }}
+      annotations:
+        checksum/rules: {{ include (print $.Template.BasePath "/host-rules-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: vmalert
+          image: {{ .Values.vmalert.image }}
+          args:
+            - "--rule=/rules/*.yml"
+            - "--datasource.url=http://{{ include "algalon.fullname" . }}-victoriametrics:8428"
+            - "--remoteWrite.url=http://{{ include "algalon.fullname" . }}-victoriametrics:8428"
+            - "--remoteRead.url=http://{{ include "algalon.fullname" . }}-victoriametrics:8428"
+            - "--notifier.url=http://{{ include "algalon.fullname" . }}-alertmanager:9093"
+            - "--evaluationInterval={{ .Values.vmalert.evaluationInterval }}"
+            - "--httpListenAddr=:8880"
+          ports:
+            - name: http
+              containerPort: 8880
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8880
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: rules
+              mountPath: /rules
+              readOnly: true
+          {{- with .Values.vmalert.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: rules
+          configMap:
+            name: {{ include "algalon.fullname" . }}-rules
+{{- end }}

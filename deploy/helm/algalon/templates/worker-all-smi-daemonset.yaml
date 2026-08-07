@@ -1,0 +1,49 @@
+{{- if .Values.allSmi.enabled }}
+{{/*
+Optional cross-platform / process-level exporter (spec §2: opt-in,
+pinned tag — never latest). Disabled by default.
+*/}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "algalon.fullname" . }}-all-smi
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "all-smi") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "all-smi") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "all-smi") | nindent 8 }}
+        algalon.io/scrape: "true"
+        algalon.io/job: all-smi
+    spec:
+      {{- with .Values.allSmi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.allSmi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: all-smi
+          image: {{ .Values.allSmi.image }}
+          args: ["api", "--port", {{ .Values.allSmi.port | quote }}, "--interval", {{ .Values.allSmi.interval | quote }}, "--processes"]
+          env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN"]
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.allSmi.port }}
+              protocol: TCP
+          {{- with .Values.allSmi.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

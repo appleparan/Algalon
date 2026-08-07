@@ -1,0 +1,58 @@
+{{- if .Values.host.enabled }}
+{{/*
+Single-replica time-series store (spec §3). StatefulSet rather than
+Deployment so the PVC follows the pod identity; retention is expressed in
+months, matching the compose stack's VM_RETENTION_MONTHS.
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "algalon.fullname" . }}-victoriametrics
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "victoriametrics") | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ include "algalon.fullname" . }}-victoriametrics
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victoriametrics") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victoriametrics") | nindent 8 }}
+    spec:
+      containers:
+        - name: victoriametrics
+          image: {{ .Values.victoriametrics.image }}
+          args:
+            - "--storageDataPath=/storage"
+            - "--retentionPeriod={{ .Values.victoriametrics.retentionMonths }}"
+          ports:
+            - name: http
+              containerPort: 8428
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8428
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+          {{- with .Values.victoriametrics.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.victoriametrics.storage.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.victoriametrics.storage.size }}
+{{- end }}

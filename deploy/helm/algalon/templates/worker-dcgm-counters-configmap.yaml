@@ -1,0 +1,16 @@
+{{- if .Values.dcgmExporter.enabled }}
+{{/*
+Counter set mounted into dcgm-exporter. Generated from
+monitoring/exporters/dcgm-counters.csv by `make helm-sync` — edit the
+source there, never files/ (which is gitignored).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algalon.fullname" . }}-dcgm-counters
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "dcgm-exporter") | nindent 4 }}
+data:
+  counters.csv: |-
+    {{- .Files.Get "files/exporters/dcgm-counters.csv" | nindent 4 }}
+{{- end }}
