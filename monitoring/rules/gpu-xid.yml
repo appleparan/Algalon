@@ -1,0 +1,66 @@
+# XID error classification (spec §5.1, Lablup report Table 3).
+# DCGM_FI_DEV_XID_ERRORS is a gauge holding the most recent XID (0 = none).
+# XID is a post-mortem signal: the GPU has already faulted when it appears.
+# The mapping below drives Alertmanager routing (Phase 2) and tells the
+# operator what recovery action is sufficient — do not change severities
+# without updating the spec.
+groups:
+  - name: gpu-xid
+    interval: 30s
+    rules:
+      # XID 31 = GPU memory page fault, 43 = GPU stopped processing,
+      # 94 = contained ECC error. Application-level: restarting the job
+      # session recovers; node exclusion is NOT required (report: these were
+      # auto-retried without excluding the node).
+      - alert: GpuXidRestartApp
+        expr: >-
+          DCGM_FI_DEV_XID_ERRORS == 31
+          or DCGM_FI_DEV_XID_ERRORS == 43
+          or DCGM_FI_DEV_XID_ERRORS == 94
+        labels:
+          severity: warning
+          action: restart_app
+        annotations:
+          summary: 'XID {{ $value }} on {{ $labels.instance }} GPU {{ $labels.gpu }}: app-level error, restart job session'
+
+      # XID 119 = GSP RPC timeout, 145 = NVLink RLW, 149 = NVLink NETIR.
+      # Hardware-level: GPU reset required before the node rejoins scheduling.
+      # NVLink errors were the most frequent failure class in the report
+      # cluster (29.4% of events).
+      - alert: GpuXidResetGpu
+        expr: >-
+          DCGM_FI_DEV_XID_ERRORS == 119
+          or DCGM_FI_DEV_XID_ERRORS == 145
+          or DCGM_FI_DEV_XID_ERRORS == 149
+        labels:
+          severity: critical
+          action: reset_gpu
+        annotations:
+          summary: 'XID {{ $value }} on {{ $labels.instance }} GPU {{ $labels.gpu }}: GPU reset required'
+
+      # XID 79 = GPU fell off the PCIe bus. Node reboot required; recurring
+      # XID 79 on the same node means hardware replacement (contact support).
+      - alert: GpuXidFellOffBus
+        expr: DCGM_FI_DEV_XID_ERRORS == 79
+        labels:
+          severity: critical
+          action: restart_bm
+        annotations:
+          summary: 'XID 79 on {{ $labels.instance }} GPU {{ $labels.gpu }}: GPU fell off the bus, reboot node'
+
+      # Any other nonzero XID: not covered by the report's Table 3 mapping.
+      - alert: GpuXidUnclassified
+        expr: >-
+          DCGM_FI_DEV_XID_ERRORS > 0
+          and DCGM_FI_DEV_XID_ERRORS != 31
+          and DCGM_FI_DEV_XID_ERRORS != 43
+          and DCGM_FI_DEV_XID_ERRORS != 94
+          and DCGM_FI_DEV_XID_ERRORS != 79
+          and DCGM_FI_DEV_XID_ERRORS != 119
+          and DCGM_FI_DEV_XID_ERRORS != 145
+          and DCGM_FI_DEV_XID_ERRORS != 149
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Unclassified XID {{ $value }} on {{ $labels.instance }} GPU {{ $labels.gpu }}: consult NVIDIA XID catalog'

@@ -1,0 +1,101 @@
+rule_files:
+  - ../../monitoring/rules/gpu-xid.yml
+
+evaluation_interval: 30s
+
+tests:
+  # XID 94 (contained ECC) -> app-level restart, warning
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_XID_ERRORS{instance="worker1:9400", gpu="0"}'
+        values: '0 0 94 94 94'
+    alert_rule_test:
+      - eval_time: 1m30s
+        groupname: gpu-xid
+        alertname: GpuXidRestartApp
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: restart_app
+              instance: worker1:9400
+              gpu: "0"
+            exp_annotations:
+              summary: 'XID 94 on worker1:9400 GPU 0: app-level error, restart job session'
+      # No other class may fire for XID 94
+      - eval_time: 1m30s
+        groupname: gpu-xid
+        alertname: GpuXidResetGpu
+        exp_alerts: []
+      - eval_time: 1m30s
+        groupname: gpu-xid
+        alertname: GpuXidUnclassified
+        exp_alerts: []
+
+  # XID 145 (NVLink RLW) -> GPU reset, critical
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_XID_ERRORS{instance="worker2:9400", gpu="3"}'
+        values: '0 145 145'
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: gpu-xid
+        alertname: GpuXidResetGpu
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: reset_gpu
+              instance: worker2:9400
+              gpu: "3"
+            exp_annotations:
+              summary: 'XID 145 on worker2:9400 GPU 3: GPU reset required'
+
+  # XID 79 (fell off bus) -> node reboot, critical
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_XID_ERRORS{instance="worker3:9400", gpu="1"}'
+        values: '0 79 79'
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: gpu-xid
+        alertname: GpuXidFellOffBus
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: restart_bm
+              instance: worker3:9400
+              gpu: "1"
+            exp_annotations:
+              summary: 'XID 79 on worker3:9400 GPU 1: GPU fell off the bus, reboot node'
+
+  # XID 63 (row-remap recording event) is not in the Table 3 mapping
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_XID_ERRORS{instance="worker4:9400", gpu="2"}'
+        values: '0 63 63'
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: gpu-xid
+        alertname: GpuXidUnclassified
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: worker4:9400
+              gpu: "2"
+            exp_annotations:
+              summary: 'Unclassified XID 63 on worker4:9400 GPU 2: consult NVIDIA XID catalog'
+
+  # XID 0 (healthy) fires nothing
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_XID_ERRORS{instance="worker5:9400", gpu="0"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: gpu-xid
+        alertname: GpuXidRestartApp
+        exp_alerts: []
+      - eval_time: 2m
+        groupname: gpu-xid
+        alertname: GpuXidUnclassified
+        exp_alerts: []
