@@ -1,0 +1,106 @@
+rule_files:
+  - ../../monitoring/rules/gpu-ecc.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Uncorrectable remapped rows increased -> critical
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS{instance="worker1:9400", gpu="1"}'
+        values: '1 1 1 2 2 2'
+    alert_rule_test:
+      - eval_time: 2m30s
+        groupname: gpu-ecc
+        alertname: GpuUncorrectableRowRemap
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: replace_gpu
+              instance: worker1:9400
+              gpu: "1"
+            exp_annotations:
+              summary: 'Uncorrectable remapped rows increased on worker1:9400 GPU 1: permanent memory damage accumulating'
+
+  # Row remap failure flag -> critical (GPU must be replaced)
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_ROW_REMAP_FAILURE{instance="worker1:9400", gpu="1"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 1m30s
+        groupname: gpu-ecc
+        alertname: GpuRowRemapFailure
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: replace_gpu
+              instance: worker1:9400
+              gpu: "1"
+            exp_annotations:
+              summary: 'Row remap FAILURE on worker1:9400 GPU 1: remapping exhausted, replace GPU'
+
+  # Remap pending for 5m -> warning (needs GPU reset to apply)
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_ROW_REMAP_PENDING{instance="worker2:9400", gpu="0"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: gpu-ecc
+        alertname: GpuRowRemapPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: schedule_reset
+              instance: worker2:9400
+              gpu: "0"
+            exp_annotations:
+              summary: 'Row remap pending on worker2:9400 GPU 0: schedule a GPU reset to apply remapping'
+
+  # Correctable remap growth: +100 rows within 24h window -> warning
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS{instance="worker3:9400", gpu="2"}'
+        values: '0+1x100'
+    alert_rule_test:
+      - eval_time: 50m
+        groupname: gpu-ecc
+        alertname: GpuCorrectableRemapGrowth
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: watch_trend
+              instance: worker3:9400
+              gpu: "2"
+            exp_annotations:
+              summary: 'Correctable remapped rows on worker3:9400 GPU 2 grew by more than 8 in 24h: memory degrading'
+
+  # Stable correctable count fires nothing
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS{instance="worker4:9400", gpu="0"}'
+        values: '25x100'
+    alert_rule_test:
+      - eval_time: 50m
+        groupname: gpu-ecc
+        alertname: GpuCorrectableRemapGrowth
+        exp_alerts: []
+
+  # Volatile double-bit ECC error -> critical
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_ECC_DBE_VOL_TOTAL{instance="worker5:9400", gpu="7"}'
+        values: '0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: gpu-ecc
+        alertname: GpuDoubleBitEccError
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: restart_app
+              instance: worker5:9400
+              gpu: "7"
+            exp_annotations:
+              summary: 'Double-bit ECC error on worker5:9400 GPU 7'

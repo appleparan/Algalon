@@ -1,0 +1,68 @@
+# Checkpoint I/O and NFS/RPC health (spec §5.5, Lablup report §4.2).
+# Report: checkpoint saves are cluster-wide NFS WRITE bursts (>20 GB/s);
+# restart loading shows sustained READ (>2 GB/s) while GPU util is low.
+# 93.1% of WRITE request latency was QUEUE time (client/transport side),
+# not server response time — so queue share is the first thing to check.
+# ALL metrics here require node_exporter --collector.mountstats.
+groups:
+  - name: storage-nfs
+    interval: 30s
+    rules:
+      # --- Recording rules: training-phase classification (report §4.2.1) ---
+      # Consumed by Phase 3 dashboards (phase bands over GPU util timelines).
+      - record: algalon:nfs_write_bytes_per_second
+        expr: sum(rate(node_mountstats_nfs_operations_sent_bytes_total{operation="WRITE"}[1m]))
+
+      - record: algalon:nfs_read_bytes_per_second
+        expr: sum(rate(node_mountstats_nfs_operations_received_bytes_total{operation="READ"}[1m]))
+
+      # Save phase: cluster NFS write above 20 GB/s.
+      - record: algalon:checkpoint_save_phase
+        expr: algalon:nfs_write_bytes_per_second > bool 20e9
+
+      # Load phase: cluster NFS read above 2 GB/s while mean GPU util < 50%.
+      - record: algalon:checkpoint_load_phase
+        expr: >-
+          (algalon:nfs_read_bytes_per_second > bool 2e9)
+          * on() (avg(DCGM_FI_DEV_GPU_UTIL) < bool 50)
+
+      # --- Alerts ---
+      # Report Fig 3: GETATTR normally ~10ms; spikes preceded worker death.
+      # 100ms sustained for 10m = metadata path / NFS server distress.
+      - alert: NfsOperationSlow
+        expr: >-
+          (
+            sum by (instance, operation) (rate(node_mountstats_nfs_operations_response_time_seconds_total[5m]))
+              / sum by (instance, operation) (rate(node_mountstats_nfs_operations_requests_total[5m]))
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'NFS {{ $labels.operation }} on {{ $labels.instance }} averaging over 100ms per operation'
+
+      # Report §4.2.5: queueing dominated storage latency. Volume guard
+      # (>10 req/s) keeps idle mounts from firing on tiny denominators.
+      - alert: NfsQueueTimeDominant
+        expr: >-
+          (
+            sum by (instance) (rate(node_mountstats_nfs_operations_queue_time_seconds_total[5m]))
+              / sum by (instance) (rate(node_mountstats_nfs_operations_request_time_seconds_total[5m]))
+          ) > 0.9
+          and sum by (instance) (rate(node_mountstats_nfs_operations_requests_total[5m])) > 10
+        for: 15m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'NFS RPC queue time on {{ $labels.instance }} exceeds 90% of total request time: transport-side bottleneck'
+
+      - alert: NfsMajorTimeouts
+        expr: sum by (instance) (rate(node_mountstats_nfs_operations_major_timeouts_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'NFS major timeouts occurring on {{ $labels.instance }}'

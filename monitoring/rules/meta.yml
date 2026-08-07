@@ -1,0 +1,37 @@
+# Monitoring-of-monitoring (spec §5.6, Lablup report Table 15).
+# The alert pipeline itself must be observable: a dead exporter looks like
+# "no alerts", which is indistinguishable from "all healthy" without these.
+groups:
+  - name: meta
+    interval: 30s
+    rules:
+      # Any scrape target down. severity=critical because a blind spot on a
+      # GPU node means XID/ECC alerts silently stop working for that node.
+      - alert: ExporterDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Exporter {{ $labels.job }} on {{ $labels.instance }} has been down for 5m'
+
+      # dcgm-exporter can be "up" while publishing nothing (driver wedged,
+      # DCGM daemon dead). absent() alone would also fire on clusters with no
+      # NVIDIA nodes, so gate on the dcgm job having live targets.
+      - alert: DcgmMetricsMissing
+        expr: absent(DCGM_FI_DEV_GPU_TEMP) and on() (count(up{job="dcgm"} == 1) > 0)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'dcgm targets are up but no DCGM metrics are being published'
+
+      # Dead man's switch: always firing; routed to a null receiver in
+      # Alertmanager (Phase 2). If the receiver stops seeing it, the pipeline
+      # (vmalert -> Alertmanager -> Slack) is broken.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline dead man's switch; this alert is always firing"

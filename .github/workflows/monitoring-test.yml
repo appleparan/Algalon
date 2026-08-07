@@ -1,0 +1,33 @@
+name: Monitoring Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'monitoring/**'
+      - 'tests/rules/**'
+      - 'Makefile'
+      - '.github/workflows/monitoring-test.yml'
+  pull_request:
+    paths:
+      - 'monitoring/**'
+      - 'tests/rules/**'
+      - 'Makefile'
+      - '.github/workflows/monitoring-test.yml'
+
+jobs:
+  monitoring:
+    name: Validate rules and scrape config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate vmalert rules
+        run: make rules-validate
+
+      - name: Run rule unit tests
+        run: make rules-test
+
+      - name: Validate vmagent scrape config
+        run: make scrape-validate

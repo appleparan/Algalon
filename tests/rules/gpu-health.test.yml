@@ -1,0 +1,92 @@
+rule_files:
+  - ../../monitoring/rules/gpu-health.yml
+
+evaluation_interval: 30s
+
+tests:
+  # 88C sustained -> warning only, not critical
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="worker1:9400", gpu="0"}'
+        values: '88x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: gpu-health
+        alertname: GpuTempHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: worker1:9400
+              gpu: "0"
+            exp_annotations:
+              summary: 'GPU temperature 88C on worker1:9400 GPU 0 (>85C for 5m)'
+      - eval_time: 6m
+        groupname: gpu-health
+        alertname: GpuTempCritical
+        exp_alerts: []
+
+  # 95C sustained -> critical fires (warning also fires; assert both)
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="worker2:9400", gpu="1"}'
+        values: '95x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: gpu-health
+        alertname: GpuTempCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: investigate
+              instance: worker2:9400
+              gpu: "1"
+            exp_annotations:
+              summary: 'GPU temperature 95C on worker2:9400 GPU 1 (>92C for 2m)'
+
+  # HBM temperature high -> warning
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_MEMORY_TEMP{instance="worker3:9400", gpu="2"}'
+        values: '97x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: gpu-health
+        alertname: GpuMemoryTempHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: worker3:9400
+              gpu: "2"
+            exp_annotations:
+              summary: 'HBM temperature 97C on worker3:9400 GPU 2 (>95C for 5m)'
+
+  # Throttle bitmask 8 (HW slowdown) sustained 10m -> warning
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="worker4:9400", gpu="3"}'
+        values: '8x30'
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: gpu-health
+        alertname: GpuClocksThrottled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: worker4:9400
+              gpu: "3"
+            exp_annotations:
+              summary: 'GPU clocks throttled (reason bitmask 8) on worker4:9400 GPU 3 for 10m'
+
+  # Benign reasons (idle 0x1, app clocks 0x2, SW power cap 0x4) never fire
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="worker5:9400", gpu="0"}'
+        values: '4x30'
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: gpu-health
+        alertname: GpuClocksThrottled
+        exp_alerts: []

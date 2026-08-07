@@ -1,0 +1,60 @@
+# ECC / row-remapping degradation (spec §5.2, Lablup report §4.1.2, Fig 4).
+# Remapped-row counters are the GPU's permanent-damage ledger. Report case
+# gpu122: uncorrectable remaps stepped up together with XID 94 until the GPU
+# died. Report case gpu124: 254 CORRECTABLE remaps accumulated over 55 days
+# with zero XID errors before the GPU vanished from the host — so the growth
+# TREND matters, not the absolute count. NVIDIA flags ROW_REMAP_FAILURE at
+# 8 uncorrectable remaps per memory bank.
+groups:
+  - name: gpu-ecc
+    interval: 30s
+    rules:
+      # Any increase in uncorrectable remaps = new permanent defect.
+      # delta() (not increase): these are gauges; GPU replacement resets the
+      # count, and a negative delta must not fire.
+      - alert: GpuUncorrectableRowRemap
+        expr: delta(DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS[10m]) > 0
+        labels:
+          severity: critical
+          action: replace_gpu
+        annotations:
+          summary: 'Uncorrectable remapped rows increased on {{ $labels.instance }} GPU {{ $labels.gpu }}: permanent memory damage accumulating'
+
+      # Remapping exhausted; NVIDIA docs: replace the GPU.
+      - alert: GpuRowRemapFailure
+        expr: DCGM_FI_DEV_ROW_REMAP_FAILURE > 0
+        labels:
+          severity: critical
+          action: replace_gpu
+        annotations:
+          summary: 'Row remap FAILURE on {{ $labels.instance }} GPU {{ $labels.gpu }}: remapping exhausted, replace GPU'
+
+      # Remap recorded but needs a GPU reset to take effect.
+      - alert: GpuRowRemapPending
+        expr: DCGM_FI_DEV_ROW_REMAP_PENDING > 0
+        for: 5m
+        labels:
+          severity: warning
+          action: schedule_reset
+        annotations:
+          summary: 'Row remap pending on {{ $labels.instance }} GPU {{ $labels.gpu }}: schedule a GPU reset to apply remapping'
+
+      # Growth-trend rule (report gpu124). Threshold 8/24h mirrors the NVIDIA
+      # per-bank failure threshold as a conservative "degrading fast" signal.
+      - alert: GpuCorrectableRemapGrowth
+        expr: delta(DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS[24h]) > 8
+        labels:
+          severity: warning
+          action: watch_trend
+        annotations:
+          summary: 'Correctable remapped rows on {{ $labels.instance }} GPU {{ $labels.gpu }} grew by more than 8 in 24h: memory degrading'
+
+      # Volatile DBE counter: uncorrected memory error hit a running process.
+      # Usually accompanied by XID 94 (contained) — app restart recovers.
+      - alert: GpuDoubleBitEccError
+        expr: increase(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL[5m]) > 0
+        labels:
+          severity: critical
+          action: restart_app
+        annotations:
+          summary: 'Double-bit ECC error on {{ $labels.instance }} GPU {{ $labels.gpu }}'

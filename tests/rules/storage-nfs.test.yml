@@ -1,0 +1,92 @@
+rule_files:
+  - ../../monitoring/rules/storage-nfs.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Save-phase recording rule: cluster WRITE throughput 25 GB/s > 20 GB/s
+  # (+750e9 bytes per 30s sample = 25e9 B/s)
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_sent_bytes_total{instance="w1:9100", operation="WRITE"}'
+        values: '0+750000000000x30'
+    metricsql_expr_test:
+      - expr: algalon:checkpoint_save_phase
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:checkpoint_save_phase'
+            value: 1
+
+  # Load-phase recording rule: cluster READ 3 GB/s with mean GPU util 20%
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_received_bytes_total{instance="w1:9100", operation="READ"}'
+        values: '0+90000000000x30'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{instance="w1:9400", gpu="0"}'
+        values: '20x30'
+    metricsql_expr_test:
+      - expr: algalon:checkpoint_load_phase
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:checkpoint_load_phase'
+            value: 1
+
+  # Per-op latency: GETATTR at 200ms average (>100ms) -> warning
+  # requests +300/sample (10/s), response_time +60s/sample (2 s/s) => 0.2s/op
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_requests_total{instance="w1:9100", operation="GETATTR"}'
+        values: '0+300x60'
+      - series: 'node_mountstats_nfs_operations_response_time_seconds_total{instance="w1:9100", operation="GETATTR"}'
+        values: '0+60x60'
+    alert_rule_test:
+      - eval_time: 15m
+        groupname: storage-nfs
+        alertname: NfsOperationSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w1:9100
+              operation: GETATTR
+            exp_annotations:
+              summary: 'NFS GETATTR on w1:9100 averaging over 100ms per operation'
+
+  # Queue time dominates request time (95%) at meaningful volume -> warning
+  # requests 20/s; request_time 1 s/s; queue_time 0.95 s/s
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_requests_total{instance="w2:9100", operation="WRITE"}'
+        values: '0+600x60'
+      - series: 'node_mountstats_nfs_operations_request_time_seconds_total{instance="w2:9100", operation="WRITE"}'
+        values: '0+30x60'
+      - series: 'node_mountstats_nfs_operations_queue_time_seconds_total{instance="w2:9100", operation="WRITE"}'
+        values: '0+28.5x60'
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: storage-nfs
+        alertname: NfsQueueTimeDominant
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w2:9100
+            exp_annotations:
+              summary: 'NFS RPC queue time on w2:9100 exceeds 90% of total request time: transport-side bottleneck'
+
+  # Major timeouts -> warning
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_major_timeouts_total{instance="w3:9100", operation="READ"}'
+        values: '0 0 0+3x30'
+    alert_rule_test:
+      - eval_time: 8m
+        groupname: storage-nfs
+        alertname: NfsMajorTimeouts
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              instance: w3:9100
+            exp_annotations:
+              summary: 'NFS major timeouts occurring on w3:9100'

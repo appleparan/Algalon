@@ -1,0 +1,5 @@
+# dcgm-exporter targets (port 9400). One entry per worker node.
+- targets:
+    - 'worker1.example.internal:9400'
+  labels:
+    node: worker1
