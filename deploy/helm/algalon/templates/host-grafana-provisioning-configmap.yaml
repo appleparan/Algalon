@@ -1,0 +1,38 @@
+{{- if .Values.host.enabled }}
+{{/*
+Grafana provisioning (spec §6.2), mirroring the compose stack's
+grafana/provisioning tree: one datasource pointing at the in-cluster
+VictoriaMetrics Service, one file provider that picks up the dashboards
+ConfigMap. The datasource is `isDefault` because every dashboard binds its
+${datasource} template variable to the default Prometheus datasource, and
+`editable: false` keeps the UI from drifting away from this chart.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algalon.fullname" . }}-grafana-provisioning
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "grafana") | nindent 4 }}
+data:
+  datasources.yml: |-
+    apiVersion: 1
+
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        url: http://{{ include "algalon.fullname" . }}-victoriametrics:8428
+        isDefault: true
+        editable: false
+  dashboards.yml: |-
+    apiVersion: 1
+
+    providers:
+      - name: algalon
+        folder: Algalon
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards/algalon
+{{- end }}

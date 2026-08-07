@@ -1,0 +1,77 @@
+{{- if .Values.host.enabled }}
+{{/*
+Visualization (spec §6.2). Single replica, stateless by design: datasource,
+dashboard provider and dashboards are all provisioned from ConfigMaps, so
+/var/lib/grafana only holds the throwaway SQLite (users, prefs, annotations)
+and an emptyDir is enough. Give it a PVC only if hand-made users or
+annotations must survive a restart.
+The dashboards ConfigMap mounts *inside* the emptyDir at
+/var/lib/grafana/dashboards/algalon; kubelet mounts shorter paths first, so
+the ordering is well defined. Both checksums force a rollout when the
+datasource URL or a dashboard changes.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algalon.fullname" . }}-grafana
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "grafana") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "grafana") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "grafana") | nindent 8 }}
+      annotations:
+        checksum/provisioning: {{ include (print $.Template.BasePath "/host-grafana-provisioning-configmap.yaml") . | sha256sum }}
+        checksum/dashboards: {{ include (print $.Template.BasePath "/host-grafana-dashboards-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: grafana
+          image: {{ .Values.grafana.image }}
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: {{ .Values.grafana.adminUser | quote }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: {{ .Values.grafana.adminPassword | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/grafana
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yml
+              subPath: datasources.yml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards/algalon
+              readOnly: true
+          {{- with .Values.grafana.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: storage
+          emptyDir: {}
+        - name: provisioning
+          configMap:
+            name: {{ include "algalon.fullname" . }}-grafana-provisioning
+        - name: dashboards
+          configMap:
+            name: {{ include "algalon.fullname" . }}-grafana-dashboards
+{{- end }}
