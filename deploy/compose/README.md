@@ -46,3 +46,22 @@ Slack delivery end to end.
 ## Validation (CI-equivalent)
 
     make compose-validate alertmanager-validate
+
+## Dashboards
+
+Provisioned automatically from `monitoring/dashboards/` into the Grafana
+folder **Algalon** (see `host/grafana/provisioning/dashboards/algalon.yml`):
+
+- **Alert Center** — firing alerts, severity counts, Watchdog pipeline
+  check, exporter up matrix
+- **GPU Fleet Overview** — fleet utilization stripes, temperature/memory
+  per node
+- **Node Health (Precursors)** — peer-band views (P5–P95 vs selected node)
+  behind the node-precursor alert rules
+- **Checkpoint & Storage I/O** — Save/Load phase bands, NFS throughput,
+  RPC queue-time share
+- **all-smi (Optional)** — populated only with the worker all-smi profile
+
+Edit a dashboard JSON in `monitoring/dashboards/` and Grafana picks it up
+within 30s (`updateIntervalSeconds`). UI edits are not persisted to git —
+export and commit them.
