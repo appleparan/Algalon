@@ -1,0 +1,49 @@
+# Thermal / throttle health (spec §5.3, Lablup report Table 8).
+# Thresholds are conservative defaults for datacenter NVIDIA parts; tune per
+# fleet if your hardware documents different limits.
+groups:
+  - name: gpu-health
+    interval: 30s
+    rules:
+      - alert: GpuTempHigh
+        expr: DCGM_FI_DEV_GPU_TEMP > 85
+        for: 5m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'GPU temperature {{ $value }}C on {{ $labels.instance }} GPU {{ $labels.gpu }} (>85C for 5m)'
+
+      - alert: GpuTempCritical
+        expr: DCGM_FI_DEV_GPU_TEMP > 92
+        for: 2m
+        labels:
+          severity: critical
+          action: investigate
+        annotations:
+          summary: 'GPU temperature {{ $value }}C on {{ $labels.instance }} GPU {{ $labels.gpu }} (>92C for 2m)'
+
+      # HBM runs hotter than the die; sustained >95C accelerates memory wear
+      # (and ECC/remap degradation tracked in gpu-ecc.yml).
+      - alert: GpuMemoryTempHigh
+        expr: DCGM_FI_DEV_MEMORY_TEMP > 95
+        for: 5m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'HBM temperature {{ $value }}C on {{ $labels.instance }} GPU {{ $labels.gpu }} (>95C for 5m)'
+
+      # CLOCKS_EVENT_REASONS is a bitmask. Bits <0x8 are benign (0x1 GPU
+      # idle, 0x2 application clocks setting, 0x4 SW power cap — normal
+      # during training). Bits >=0x8 (HW slowdown / thermal / power brake /
+      # sync boost) indicate real performance loss: a fail-slow signal, the
+      # straggler class the report says is harder to catch than fail-stop.
+      - alert: GpuClocksThrottled
+        expr: DCGM_FI_DEV_CLOCKS_EVENT_REASONS >= 8
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'GPU clocks throttled (reason bitmask {{ $value }}) on {{ $labels.instance }} GPU {{ $labels.gpu }} for 10m'
