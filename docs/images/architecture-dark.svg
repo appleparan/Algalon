@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 570" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Worker group -->
+  <rect x="90" y="18" width="600" height="122" rx="10" fill="#161e2e" stroke="#475569" stroke-width="1.5"/>
+  <text x="390" y="44" text-anchor="middle" font-size="14" font-weight="600" fill="#e2e8f0">GPU worker nodes ×N</text>
+  <text x="390" y="62" text-anchor="middle" font-size="12" fill="#94a3b8">Compose stack or k3s DaemonSets</text>
+
+  <rect x="112" y="76" width="170" height="46" rx="7" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="197" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="#e2e8f0">dcgm-exporter</text>
+  <text x="197" y="112" text-anchor="middle" font-size="11.5" fill="#94a3b8">GPU · XID · ECC&#160;&#160;:9400</text>
+
+  <rect x="305" y="76" width="170" height="46" rx="7" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="390" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="#e2e8f0">node-exporter</text>
+  <text x="390" y="112" text-anchor="middle" font-size="11.5" fill="#94a3b8">OS · NFS · IRQ&#160;&#160;:9100</text>
+
+  <rect x="498" y="76" width="170" height="46" rx="7" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="583" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="#e2e8f0">all-smi</text>
+  <text x="583" y="112" text-anchor="middle" font-size="11.5" fill="#94a3b8">optional&#160;&#160;:9090</text>
+
+  <!-- scrape arrow -->
+  <line x1="390" y1="140" x2="390" y2="186" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="402" y="167" font-size="12" fill="#94a3b8">scrape · every 30s</text>
+
+  <!-- vmagent -->
+  <rect x="315" y="190" width="150" height="44" rx="7" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="390" y="216" text-anchor="middle" font-size="13.5" font-weight="600" fill="#e2e8f0">vmagent</text>
+
+  <!-- remote write arrow -->
+  <line x1="390" y1="234" x2="390" y2="276" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="402" y="259" font-size="12" fill="#94a3b8">remote write</text>
+
+  <!-- VictoriaMetrics -->
+  <rect x="285" y="280" width="210" height="48" rx="7" fill="#312e81" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="390" y="300" text-anchor="middle" font-size="13.5" font-weight="600" fill="#e0e7ff">VictoriaMetrics</text>
+  <text x="390" y="317" text-anchor="middle" font-size="11.5" fill="#a5b4fc">time series storage&#160;&#160;:8428</text>
+
+  <!-- Grafana -->
+  <rect x="565" y="280" width="150" height="48" rx="7" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="640" y="300" text-anchor="middle" font-size="13.5" font-weight="600" fill="#e2e8f0">Grafana</text>
+  <text x="640" y="317" text-anchor="middle" font-size="11.5" fill="#94a3b8">5 dashboards&#160;&#160;:3000</text>
+  <line x1="561" y1="304" x2="499" y2="304" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- query arrow -->
+  <line x1="390" y1="328" x2="390" y2="371" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="402" y="353" font-size="12" fill="#94a3b8">query · 30s evaluation</text>
+
+  <!-- vmalert -->
+  <rect x="300" y="375" width="180" height="48" rx="7" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="390" y="395" text-anchor="middle" font-size="13.5" font-weight="600" fill="#e2e8f0">vmalert</text>
+  <text x="390" y="412" text-anchor="middle" font-size="11.5" fill="#94a3b8">6 rule groups&#160;&#160;:8880</text>
+
+  <!-- fired alerts arrow -->
+  <line x1="390" y1="423" x2="390" y2="466" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="402" y="448" font-size="12" fill="#94a3b8">fired alerts</text>
+
+  <!-- Alertmanager -->
+  <rect x="280" y="470" width="220" height="48" rx="7" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="390" y="490" text-anchor="middle" font-size="13.5" font-weight="600" fill="#e2e8f0">Alertmanager</text>
+  <text x="390" y="507" text-anchor="middle" font-size="11.5" fill="#94a3b8">route · group · inhibit&#160;&#160;:9093</text>
+
+  <!-- Slack routes -->
+  <line x1="500" y1="486" x2="561" y2="470" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="500" y1="502" x2="561" y2="518" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="565" y="446" width="150" height="36" rx="7" fill="#3f1d1d" stroke="#f87171" stroke-width="1.5"/>
+  <text x="640" y="469" text-anchor="middle" font-size="12.5" font-weight="600" fill="#fecaca">Slack · critical</text>
+
+  <rect x="565" y="508" width="150" height="36" rx="7" fill="#3d2410" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="640" y="531" text-anchor="middle" font-size="12.5" font-weight="600" fill="#fed7aa">Slack · warning</text>
+
+  <!-- single source note -->
+  <rect x="30" y="280" width="215" height="88" rx="7" fill="#131a26" stroke="#475569" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="137" y="302" text-anchor="middle" font-size="12" font-weight="600" fill="#cbd5e1">monitoring/ — single source</text>
+  <text x="137" y="320" text-anchor="middle" font-size="11.5" fill="#94a3b8">rules · dashboards · scrape</text>
+  <text x="137" y="336" text-anchor="middle" font-size="11.5" fill="#94a3b8">Alertmanager policy · counters</text>
+  <text x="137" y="356" text-anchor="middle" font-size="11" fill="#7d8a9c">mounted by Compose · packed by Helm</text>
+</svg>
