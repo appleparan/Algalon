@@ -45,7 +45,7 @@ Slack delivery end to end.
 
 ## Validation (CI-equivalent)
 
-    make compose-validate alertmanager-validate
+    make compose-validate alertmanager-validate dashboards-validate
 
 ## Dashboards
 
