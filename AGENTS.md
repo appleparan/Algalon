@@ -56,9 +56,11 @@ analysis).
 
 ## Verification
 
-- Rules: `vmalert -dryRun` + promtool syntax check
+- Rules: `vmalert -dryRun` + rule unit tests
 - Compose: `docker compose config` (both stacks, with and without profiles)
+- Alertmanager: `amtool check-config`
+- Dashboards: jq convention checks
 - Helm: `helm lint` && `helm template | kubeconform`
-- Terraform: `terraform fmt -check` && `terraform validate`
+- E2E: `make e2e-k3d` (added in Task 4)
 
 Run the checks for every layer a change touches before committing.
