@@ -20,12 +20,18 @@ route:
       receiver: slack-critical
 
 inhibit_rules:
-  # A critical alert on a node suppresses warnings on the same node —
-  # the page already covers it (spec §5). Alerts without a node label
-  # (Watchdog, cluster-wide) are not affected: empty label must match on
-  # both sides for inhibition to apply.
+  # A node-scoped critical suppresses warnings on the SAME node — the page
+  # already covers it (spec §5).
+  # `node!=""` on the source side is load-bearing: under `equal`,
+  # Alertmanager treats an absent label as matching an absent label, so
+  # without the guard any cluster-wide critical that carries no node label
+  # (e.g. SlurmNodeDown) would blanket-suppress every node-less warning
+  # (SlurmNodeDrained, SlurmJobFailureSpike, SlurmQueueStalledWithIdleNodes,
+  # DcgmMetricsMissing). Those warnings are independent signals and must keep
+  # reaching Slack, so node-less criticals deliberately inhibit nothing.
   - source_matchers:
       - severity="critical"
+      - node!=""
     target_matchers:
       - severity="warning"
     equal: ['node']

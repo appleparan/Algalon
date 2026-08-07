@@ -23,3 +23,24 @@ scrape_configs:
     file_sd_configs:
       - files:
           - /etc/vmagent/targets/all-smi-targets.yml
+
+  # Optional Slurm integration — two distinct exporters, two distinct jobs:
+  #   slurm      prometheus-slurm-exporter, one instance on the slurmctld or
+  #              login node (port 9092). Cluster-wide queue/partition state,
+  #              so no `node` label applies.
+  #   slurm-job  slurm-job-exporter, one instance per compute node (port
+  #              9798). Per-job cgroup and GPU accounting, labelled with the
+  #              Slurm job id (`slurmjobid`).
+  # Every slurm-job target MUST carry a `node` label matching the `node`
+  # label used by the dcgm/node jobs — that label is the join key that lets
+  # job-level series line up with GPU/host series for the same machine.
+  # Both target files stay empty unless Slurm integration is in use.
+  - job_name: slurm
+    file_sd_configs:
+      - files:
+          - /etc/vmagent/targets/slurm-targets.yml
+
+  - job_name: slurm-job
+    file_sd_configs:
+      - files:
+          - /etc/vmagent/targets/slurm-job-targets.yml

@@ -1,0 +1,8 @@
+# slurm-job-exporter targets (port 9798). One entry per compute node.
+# The `node` label is REQUIRED and must match the value used in
+# dcgm-targets.yml / node-targets.yml — it joins per-job series to the
+# GPU and host series of the same machine.
+- targets:
+    - 'gpu01.example.internal:9798'
+  labels:
+    node: gpu01

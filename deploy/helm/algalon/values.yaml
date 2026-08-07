@@ -35,6 +35,15 @@ allSmi:
   resources:
     requests: {cpu: 100m, memory: 128Mi}
 
+# -- Slurm integration (optional) --
+# Both exporters run OUTSIDE the cluster on Slurm hosts; list them here.
+slurm:
+  enabled: false
+  # prometheus-slurm-exporter on the slurmctld/login node (queue/partition state)
+  queueTargets: []        # e.g. ["slurmctld.example.internal:9092"]
+  # slurm-job-exporter on every compute node (per-job cgroup/GPU accounting)
+  jobTargets: []          # e.g. [{address: "gpu01.example.internal:9798", node: "gpu01"}]
+
 # -- Host stack --
 host:
   enabled: true

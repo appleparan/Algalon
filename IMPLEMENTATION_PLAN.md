@@ -5,14 +5,17 @@
 
 ## Phases
 
+<!-- markdownlint-disable MD013 -->
 | Phase | Plan | Status |
-|---|---|---|
+| --- | --- | --- |
 | 0. Spec + AGENTS.md rewrite | (spec §8) | ✅ done |
 | 1. `monitoring/` single source (6 rule groups, scrape config, dcgm CSV, rule tests, CI) | `docs/superpowers/plans/2026-08-07-alert-center-phase1-monitoring.md` | ✅ done |
 | 2. Compose stacks (`deploy/compose/{worker,host}`) | `docs/superpowers/plans/2026-08-07-alert-center-phase2-compose.md` | ✅ done |
 | 3. Dashboards | `docs/superpowers/plans/2026-08-07-alert-center-phase3-dashboards.md` | ✅ done |
 | 4. Helm chart | `docs/superpowers/plans/2026-08-07-alert-center-phase4-helm.md` | ✅ done |
 | 5. Legacy removal + local deploy strategy (k3s) + e2e | `docs/superpowers/plans/2026-08-07-alert-center-phase5-local-deploy.md` | ✅ done |
+| 6. Slurm integration (scrape wiring, `slurm` rule group, 2 dashboards, bilingual docs) | `docs/superpowers/plans/2026-08-08-phase6-slurm-integration.md` | ✅ done |
+<!-- markdownlint-enable MD013 -->
 
 ## Notes carried to later phases
 
@@ -31,6 +34,11 @@
   `checkpoint_load_phase` series means "unknown", not "not loading".
 - **Future**: peer-relative `scalar()` guards assume a homogeneous fleet;
   revisit with `by(...)` grouping for mixed hardware.
+- **Phase 6 (Slurm)**: the `node` label on `slurm-job` targets is the join
+  key for every job↔hardware query — a mismatch fails silently. Node-level
+  signals (DCGM, NFS, `ALERTS`) attribute to a job only on exclusive nodes.
+  The Alertmanager inhibit rule now requires `node!=""` on the source side,
+  so cluster-wide criticals (e.g. `SlurmNodeDown`) inhibit nothing.
 - **Phase 5 (CI Cost-Estimation bug — dissolved, terraform removed)**: the
   `terraform-test.yml` Cost Estimation job failed on any PR touching
   `tests/**` because it `cd`ed into a nonexistent example directory. The

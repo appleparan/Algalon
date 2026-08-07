@@ -21,7 +21,7 @@ to keep its exporters listening.
 | all-smi *(optional)* | Cross-platform accelerator and process-level view |
 | vmagent | Scrapes the exporters and remote-writes into VictoriaMetrics |
 | VictoriaMetrics | Time series storage |
-| vmalert | Evaluates the six rule groups every 30 s; writes recording rules back |
+| vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
 | Grafana | Five auto-provisioned dashboards |
 
@@ -30,7 +30,7 @@ scrape config, Alertmanager policy and the DCGM counter set. Docker
 Compose bind-mounts that directory and Helm packages it into ConfigMaps —
 nothing is ever copied into `deploy/`.
 
-## The six rule groups
+## The six core rule groups
 
 Each group in `monitoring/rules/` encodes a finding from the Lablup
 report, and each rule carries an inline citation to the section, table or
@@ -92,6 +92,9 @@ itself is broken.
 Rule unit tests for all six groups live in `tests/rules/` and run
 without any GPU hardware.
 
+With Slurm integration enabled, an optional seventh group (`slurm`) adds
+queue and job-accounting alerts — see [Slurm integration](slurm.md).
+
 ## Alerting policy
 
 Alertmanager routes `severity="critical"` and `severity="warning"` to
@@ -103,7 +106,7 @@ notifier.
 
 ## Dashboards
 
-Five Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+Seven Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
 into the **Algalon** folder:
 
 - **Alert Center** — what is firing right now, by severity and node,
@@ -119,3 +122,6 @@ into the **Algalon** folder:
   panels, reproducing the report's Fig 5.
 - **all-smi (Optional)** — cross-platform hardware view; populated only
   when the all-smi profile is enabled.
+- **Slurm Queue / Slurm Job Explorer** — queue state and per-job
+  accounting views; populated only with
+  [Slurm integration](slurm.md).

@@ -1,0 +1,105 @@
+# Slurm queue and per-job accounting alerts (Phase 6).
+#
+# Two external exporters feed this group — neither runs inside Algalon:
+#   * prometheus-slurm-exporter (rivosinc) on the slurmctld/login node,
+#     scrape job `slurm`, port 9092 — cluster-wide queue and node state:
+#     slurm_node_count_per_state{state="alloc|idle|drain|down"},
+#     slurm_job_count_per_state{state="pending|running|failed|..."}.
+#   * slurm-job-exporter (guilbaults) on every compute node, scrape job
+#     `slurm-job`, port 9798 — cgroup/NVML per-job accounting labelled with
+#     `user`, `account` and `slurmjobid`; its targets carry Algalon's `node`
+#     label, which is what lets job series join DCGM/node-exporter series
+#     `on(node)`.
+#
+# Design intent: the queue exporter answers "is the scheduler healthy?"
+# (rules 1-4), the job exporter answers "is the allocated hardware actually
+# being used?" (rule 5). Slurm integration is opt-in, so an absent exporter
+# simply produces no series and no alerts.
+#
+# Severities follow the repo contract: only a scheduler-visible node loss
+# pages as critical; everything else is a warning with action `investigate`,
+# because the remedy is always human triage (drain reason, partition/QOS
+# limits, job owner) rather than an automated restart or reset.
+groups:
+  - name: slurm
+    interval: 30s
+    rules:
+      # Nodes in DOWN state are unusable capacity and usually mean the
+      # slurmd/host died rather than an operator action. 5m of hold filters
+      # the brief DOWN blips seen while a node reboots into the scheduler.
+      # Critical: unlike drain, nothing about this is intentional.
+      - alert: SlurmNodeDown
+        expr: slurm_node_count_per_state{state="down"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          action: investigate
+        annotations:
+          summary: '{{ $value }} Slurm node(s) DOWN'
+
+      # DRAIN is an operator/health-check action, so it is expected to occur
+      # — what is not expected is for it to persist. 10m (double the DOWN
+      # hold) lets a short maintenance drain pass silently while catching
+      # nodes that were drained by a health check and then forgotten,
+      # quietly shrinking the cluster.
+      - alert: SlurmNodeDrained
+        expr: slurm_node_count_per_state{state="drain"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: '{{ $value }} Slurm node(s) DRAINED'
+
+      # A burst of failed jobs is the scheduler-side echo of a cluster-side
+      # fault (bad node, broken shared filesystem, exhausted quota). The 30m
+      # window with a >3 threshold ignores ordinary per-user attrition and
+      # only reacts to a cluster-wide pattern. No `for:` — the window itself
+      # already provides the smoothing.
+      - alert: SlurmJobFailureSpike
+        expr: delta(slurm_job_count_per_state{state="failed"}[30m]) > 3
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: '{{ $value }} Slurm job(s) entered failed state in the last 30m'
+
+      # Pending work while nodes sit idle is the signature of a
+      # scheduler/partition misconfiguration (wrong partition, QOS or
+      # association limit, unsatisfiable node feature/GRES request) rather
+      # than a capacity shortage — capacity shortage shows pending jobs with
+      # zero idle nodes, which this rule deliberately ignores. `and on()`
+      # correlates the two cluster-wide scalars without any shared labels;
+      # the resulting alert keeps the pending-job series' labels. 30m of
+      # hold keeps normal backfill/scheduling latency out of Slack.
+      - alert: SlurmQueueStalledWithIdleNodes
+        expr: >-
+          (slurm_job_count_per_state{state="pending"} > 0)
+          and on() (slurm_node_count_per_state{state="idle"} > 0)
+        for: 30m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: '{{ $value }} Slurm job(s) pending for 30m while nodes sit idle - check partition/QOS limits'
+
+      # Allocation-waste alert, and the reason the per-node job exporter is
+      # part of Phase 6 at all. The Lablup report's introduction cites
+      # Microsoft's finding of a median GPU utilization around 52% in
+      # production training clusters: the dominant failure mode of a GPU
+      # cluster is not a broken GPU but a healthy GPU held idle by a job.
+      # DCGM alone cannot report this — it has no idea which job owns the
+      # device — so the attribution comes from the job exporter's cgroup
+      # labels. `avg by (node, user, slurmjobid)` collapses the per-GPU
+      # series into one alert per job-on-node, and those three labels ride
+      # into the Slack notification, so the operator gets the owner and the
+      # job id without opening a dashboard. 30m of hold skips data staging,
+      # checkpoint restore and other legitimately GPU-quiet phases.
+      - alert: SlurmJobGpuIdle
+        expr: avg by (node, user, slurmjobid) (slurm_job_utilization_gpu) < 10
+        for: 30m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Job {{ $labels.slurmjobid }} (user {{ $labels.user }}) is holding GPUs on {{ $labels.node }} below 10% utilization for 30m'
