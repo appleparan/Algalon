@@ -1,0 +1,63 @@
+{{- if .Values.dcgmExporter.enabled }}
+{{/*
+Failure-detection backbone: XID, ECC, remapped rows, thermal (spec §3).
+Publishes exactly the fields listed in the dcgm-counters ConfigMap.
+*/}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "algalon.fullname" . }}-dcgm-exporter
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "dcgm-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "dcgm-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "dcgm-exporter") | nindent 8 }}
+        algalon.io/scrape: "true"
+        algalon.io/job: dcgm
+      annotations:
+        checksum/counters: {{ .Files.Get "files/exporters/dcgm-counters.csv" | sha256sum }}
+    spec:
+      {{- with .Values.dcgmExporter.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.dcgmExporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dcgmExporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: dcgm-exporter
+          image: {{ .Values.dcgmExporter.image }}
+          args: ["-f", "/etc/dcgm-exporter/counters.csv"]
+          env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN"]
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.dcgmExporter.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: counters
+              mountPath: /etc/dcgm-exporter/counters.csv
+              subPath: counters.csv
+              readOnly: true
+          {{- with .Values.dcgmExporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: counters
+          configMap:
+            name: {{ include "algalon.fullname" . }}-dcgm-counters
+{{- end }}
