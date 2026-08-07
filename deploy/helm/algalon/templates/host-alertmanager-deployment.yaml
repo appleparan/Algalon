@@ -1,0 +1,67 @@
+{{- if .Values.host.enabled }}
+{{/*
+Alert routing and Slack delivery (spec §5). Single replica, no clustering:
+the notification log in /alertmanager is a de-duplication cache, so an
+emptyDir is enough — losing it on restart can at worst repeat one
+notification. The config checksum forces a rollout when the policy changes.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algalon.fullname" . }}-alertmanager
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "alertmanager") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "alertmanager") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "alertmanager") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/host-alertmanager-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: alertmanager
+          image: {{ .Values.alertmanager.image }}
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--storage.path=/alertmanager"
+          ports:
+            - name: http
+              containerPort: 9093
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager/alertmanager.yml
+              subPath: alertmanager.yml
+              readOnly: true
+            # Slack webhooks land here as files; the policy references them
+            # as /etc/alertmanager/secrets/slack_webhook_{critical,warning}.
+            - name: slack
+              mountPath: /etc/alertmanager/secrets
+              readOnly: true
+            - name: storage
+              mountPath: /alertmanager
+          {{- with .Values.alertmanager.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "algalon.fullname" . }}-alertmanager
+        - name: slack
+          secret:
+            secretName: {{ include "algalon.alertmanagerSecretName" . }}
+        - name: storage
+          emptyDir: {}
+{{- end }}

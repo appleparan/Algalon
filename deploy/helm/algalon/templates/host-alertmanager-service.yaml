@@ -1,0 +1,21 @@
+{{- if .Values.host.enabled }}
+{{/*
+Notification endpoint. The DNS name <fullname>-alertmanager:9093 is a
+contract: vmalert's --notifier.url points at it.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algalon.fullname" . }}-alertmanager
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "alertmanager") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "alertmanager") | nindent 4 }}
+{{- end }}

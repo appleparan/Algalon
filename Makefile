@@ -484,8 +484,15 @@ helm-sync: ## Sync monitoring/ content into the Helm chart files/ dir (generated
 	@rsync -a --delete monitoring/rules monitoring/dashboards monitoring/alerting monitoring/exporters deploy/helm/algalon/files/
 	@echo "✅ helm files synced"
 
+# Alertmanager has no usable default for the Slack webhooks — the chart fails
+# the render rather than shipping a broken notifier — so validation supplies
+# throwaway URLs. Never point these at a real workspace.
+HELM_VALIDATE_SET := --set allSmi.enabled=true \
+	--set alertmanager.slack.criticalUrl=https://hooks.example/x \
+	--set alertmanager.slack.warningUrl=https://hooks.example/y
+
 helm-validate: helm-sync ## Lint and schema-validate the Helm chart
-	@helm lint deploy/helm/algalon
-	@helm template algalon deploy/helm/algalon --set allSmi.enabled=true \
+	@helm lint deploy/helm/algalon $(HELM_VALIDATE_SET)
+	@helm template algalon deploy/helm/algalon $(HELM_VALIDATE_SET) \
 		| docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_TAG) -strict -summary
 	@echo "✅ helm chart valid"

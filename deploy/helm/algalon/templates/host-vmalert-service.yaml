@@ -1,0 +1,21 @@
+{{- if .Values.host.enabled }}
+{{/*
+vmalert's own UI/API (/api/v1/rules, /-/reload) — the Alert Center dashboard
+and operators reach it at <fullname>-vmalert:8880.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algalon.fullname" . }}-vmalert
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "vmalert") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8880
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "vmalert") | nindent 4 }}
+{{- end }}
