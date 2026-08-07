@@ -1,0 +1,100 @@
+# Algalon host stack: storage, scraping, rule evaluation, routing, UI.
+# All monitoring content (scrape config, rules, alerting policy) is
+# bind-mounted read-only from monitoring/ — the single source of truth.
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.149.0
+    container_name: algalon-victoriametrics
+    restart: unless-stopped
+    ports:
+      - "${VM_PORT:-8428}:8428"
+    volumes:
+      - vmdata:/storage
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=${VM_RETENTION_MONTHS:-3}'
+    networks:
+      - monitoring
+
+  # Scrapes workers listed in ./targets/*.yml (copy from
+  # monitoring/scrape/targets/*.yml.example) and writes to VictoriaMetrics.
+  vmagent:
+    image: victoriametrics/vmagent:v1.149.0
+    container_name: algalon-vmagent
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+    volumes:
+      - ../../../monitoring/scrape/prometheus.yml:/etc/vmagent/prometheus.yml:ro
+      - ./targets:/etc/vmagent/targets:ro
+    command:
+      - '--promscrape.config=/etc/vmagent/prometheus.yml'
+      - '--remoteWrite.url=http://victoriametrics:8428/api/v1/write'
+    networks:
+      - monitoring
+
+  # Evaluates monitoring/rules/*.yml every 30s; recording rules are written
+  # back via remoteWrite; alert state is restored via remoteRead.
+  vmalert:
+    image: victoriametrics/vmalert:v1.149.0
+    container_name: algalon-vmalert
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+      - alertmanager
+    ports:
+      - "${VMALERT_PORT:-8880}:8880"
+    volumes:
+      - ../../../monitoring/rules:/rules:ro
+    command:
+      - '--rule=/rules/*.yml'
+      - '--datasource.url=http://victoriametrics:8428'
+      - '--remoteWrite.url=http://victoriametrics:8428'
+      - '--remoteRead.url=http://victoriametrics:8428'
+      - '--notifier.url=http://alertmanager:9093'
+      - '--evaluationInterval=30s'
+      - '--httpListenAddr=:8880'
+    networks:
+      - monitoring
+
+  # Routing policy from monitoring/alerting/alertmanager.yml; Slack webhook
+  # FILES go in ./secrets/ (gitignored) — see secrets/README.md.
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    container_name: algalon-alertmanager
+    restart: unless-stopped
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ../../../monitoring/alerting/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets:/etc/alertmanager/secrets:ro
+      - amdata:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:13.1.3
+    container_name: algalon-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    networks:
+      - monitoring
+
+volumes:
+  vmdata:
+  amdata:
+  grafanadata:
+
+networks:
+  monitoring:
+    driver: bridge

@@ -462,4 +462,5 @@ alertmanager-validate: ## Validate Alertmanager routing config
 compose-validate: ## Validate compose stacks
 	@docker compose -f deploy/compose/worker/docker-compose.yml config -q
 	@docker compose -f deploy/compose/worker/docker-compose.yml --profile all-smi config -q
+	@docker compose -f deploy/compose/host/docker-compose.yml config -q
 	@echo "✅ compose stacks valid"
