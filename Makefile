@@ -1,7 +1,7 @@
 # Algalon Terraform Testing Makefile
 # Provides convenient commands for development and CI/CD
 
-.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format
+.PHONY: help init validate plan apply destroy test test-unit test-integration test-e2e lint security docs clean format check-format rules-validate rules-test scrape-validate
 
 # Default target
 help: ## Show this help message
@@ -431,3 +431,18 @@ deps: ## Install Go dependencies for tests
 	@(cd tests/integration && go mod tidy)
 	@(cd tests/e2e && go mod tidy)
 	@echo "✅ Go dependencies installed"
+
+# Monitoring / alert rules
+VM_VERSION := v1.149.0
+
+rules-validate: ## Validate vmalert rule file syntax
+	@docker run --rm -v $(PWD)/monitoring/rules:/rules:ro \
+		victoriametrics/vmalert:$(VM_VERSION) \
+		-rule=/rules/*.yml -datasource.url=http://localhost:8428 -dryRun
+	@echo "✅ vmalert rules valid"
+
+rules-test: ## Run vmalert rule unit tests
+	@docker run --rm -v $(PWD):/repo:ro -w /repo \
+		victoriametrics/vmalert-tool:$(VM_VERSION) \
+		unittest -files='tests/rules/*.test.yml'
+	@echo "✅ rule unit tests passed"

@@ -1,0 +1,50 @@
+rule_files:
+  - ../../monitoring/rules/meta.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Exporter target down for >5m fires critical
+  - interval: 30s
+    input_series:
+      - series: 'up{job="dcgm", instance="worker1:9400"}'
+        values: '1 1 0x20'
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: meta
+        alertname: ExporterDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: dcgm
+              instance: worker1:9400
+            exp_annotations:
+              summary: 'Exporter dcgm on worker1:9400 has been down for 5m'
+
+  # dcgm job has live targets but publishes no GPU metrics
+  - interval: 30s
+    input_series:
+      - series: 'up{job="dcgm", instance="worker1:9400"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: meta
+        alertname: DcgmMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 'dcgm targets are up but no DCGM metrics are being published'
+
+  # Watchdog always fires
+  - interval: 30s
+    input_series: []
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: meta
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: 'Alerting pipeline dead man''s switch; this alert is always firing'
