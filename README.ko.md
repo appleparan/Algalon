@@ -76,7 +76,7 @@ save/load 구간 임계값, NFS 큐 대기 시간 분석이 모두 alert rule과
 | Docker Compose | 단일 노드, 개발 환경, 소규모 클러스터 | [`deploy/compose/`](deploy/compose/README.md) |
 
 [배포 가이드](docs/ko/deployment.md)에서 세 방식을 비교하고, k3s 방식이
-Docker 기반 학습 워크로드와 어떻게 공존하는지 설명합니다.
+호스트의 학습 워크로드(Docker·Apptainer·베어 프로세스)와 어떻게 공존하는지 설명합니다.
 
 ## 문서
 

@@ -78,7 +78,8 @@ content, so the rules and dashboards are identical everywhere:
 | Docker Compose | Single node, development, small fleets | [`deploy/compose/`](deploy/compose/README.md) |
 
 The [deployment guide](docs/deployment.md) compares the three paths and
-explains how the k3s path coexists with Docker-based training workloads.
+explains how the k3s path coexists with the host's training workloads
+(Docker, Apptainer, or bare processes).
 
 ## Documentation
 
