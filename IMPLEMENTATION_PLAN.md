@@ -1,7 +1,7 @@
 # Alert Center Redesign — Status
 
 - **Spec**: `docs/superpowers/specs/2026-08-07-alert-center-design.md` (approved)
-- **Branch**: `feat/alert-center-redesign`
+- **Branches**: `feat/alert-center-*` (one per phase, PRs #1-#5)
 
 ## Phases
 

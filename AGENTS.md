@@ -62,6 +62,6 @@ analysis).
 - Alertmanager: `amtool check-config`
 - Dashboards: jq convention checks
 - Helm: `helm lint` && `helm template | kubeconform`
-- E2E: `make e2e-k3d` (added in Task 4)
+- E2E: `make e2e-k3d`
 
 Run the checks for every layer a change touches before committing.
