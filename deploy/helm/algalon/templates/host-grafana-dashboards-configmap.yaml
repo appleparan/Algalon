@@ -1,6 +1,6 @@
 {{- if .Values.host.enabled }}
 {{/*
-The five dashboards, one ConfigMap key per monitoring/dashboards/*.json, so
+The Algalon dashboards, one ConfigMap key per monitoring/dashboards/*.json, so
 the `algalon` file provider sees the same directory layout it does under
 compose. ~130KB total, comfortably inside the 1MiB ConfigMap limit; split
 this if the set ever grows several times over. Contents are injected
