@@ -1,789 +1,230 @@
-# Algalon 🌟
-*The Comprehensive Hardware Observer - Multi-Platform Monitoring Solution*
+# Algalon
 
-A scalable, distributed monitoring system that provides real-time insights into GPU, CPU, and system performance across multiple remote nodes with clean, ID-based labeling and intuitive dashboards. Powered by **[all-smi](https://github.com/inureyes/all-smi)** for comprehensive multi-platform hardware monitoring.
+*The Comprehensive Hardware Observer — a GPU cluster alert center.*
 
-Deploy with **Terraform** for production-ready infrastructure or **Docker Compose** for development and testing.
+Algalon is an alert center for large GPU training clusters. It collects
+DCGM, OS and (optionally) cross-platform hardware metrics from every GPU
+node, stores them in VictoriaMetrics, evaluates six curated alert rule
+groups with vmalert, routes the result through Alertmanager to Slack, and
+renders the whole picture in five Grafana dashboards. The rules are not
+generic thresholds: they encode failure signatures observed on a real
+504-GPU pre-training run, so an operator is told *which recovery action*
+a fault requires — restart the job, reset the GPU, or reboot the node.
 
-## ✨ Features
+## Origin & Attribution
 
-- **🎯 Hardware ID Display**: Shows GPU 0, 1, 2... and CPU cores with clear identification
-- **🌐 Distributed Architecture**: Monitor hardware across multiple remote worker nodes
-- **🚀 Multi-Platform Support**: NVIDIA GPUs, Apple Silicon, Jetson, NPUs via all-smi
-- **📊 Comprehensive Monitoring**: GPU + CPU + Memory + Process-level metrics
-- **⚡ Real-time Monitoring**: Configurable update intervals for live performance tracking
-- **🏗️ Infrastructure as Code**: Deploy with Terraform for cloud-native scalability
-- **🐋 Containerized**: Complete Docker Compose deployment with host/worker separation
-- **📈 Auto-provisioned**: Grafana dashboards and datasources ready out-of-the-box
-- **🔧 Production Ready**: Built with VictoriaMetrics for scalable time-series storage
-- **📡 Remote Scraping**: VMAgent collects metrics from distributed all-smi exporters
-- **☁️ Cloud Ready**: Native Google Cloud Platform support with auto-scaling
+**This project originated from, and directly references, the Lablup
+technical report *From Detection to Recovery: Operational Analysis on LLM
+Pre-training with 504 GPUs* and its accompanying dataset repository.**
+Algalon's alert rules, thresholds, severity mapping and dashboard layouts
+encode the operational findings of that report — the XID classification
+table, the row-remap degradation cases, the checkpoint I/O phases and the
+NFS queue-time analysis all come from it. Rule files carry inline
+citations back to the specific report section, table or figure they
+implement.
 
-## 🏗️ Architecture
+Sources:
 
-### Distributed Setup
+- Dataset repository:
+  <https://huggingface.co/datasets/lablup/from-detection-to-recovery>
+- Report (PDF):
+  <https://huggingface.co/datasets/lablup/from-detection-to-recovery/blob/main/Lablup_Technical_Report_2026_ko.pdf>
+- arXiv: <https://arxiv.org/abs/2605.09370>
+
+Please cite this work as **"Lablup Inc. (2026)"** (inquiries:
+<https://www.lablup.com/contact>).
+
+<!-- markdownlint-disable MD013 -->
+```bibtex
+@misc{arxiv2605.09370,
+  title        = {From Detection to Recovery: Operational Analysis on LLM Pre-training with 504 GPUs},
+  author       = {{Lablup Inc.}},
+  year         = {2026},
+  eprint       = {2605.09370},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.AI},
+  note         = {Daemyung Kang, Eunjin Hwang, Hanjeong Lee, HyeokJin Kim, Hyunhoi Koo, Jeongkyu Shin, Jeongseok Kang, Jihyun Kang, Jinho Heo, Joongi Kim, Junbum Lee, Jungseung Yang, Kyujin Cho, and Youngsook Song},
+  url          = {https://arxiv.org/abs/2605.09370}
+}
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                          Host Node                              │
-│  ┌──────────────┐    ┌─────────────────┐    ┌─────────────────┐ │
-│  │   VMAgent    │───▶│ VictoriaMetrics │───▶│     Grafana     │ │
-│  │ (Scraping)   │    │ (Time Series)   │    │  (Dashboards)   │ │
-│  └──────┬───────┘    └─────────────────┘    └─────────────────┘ │
-└─────────┼───────────────────────────────────────────────────────┘
-          │ Remote scraping over network
-          │
-┌─────────▼─────────┐  ┌──────────────────┐  ┌──────────────────┐
-│   Worker Node 1   │  │   Worker Node 2  │  │   Worker Node N  │
-│ ┌───────────────┐ │  │ ┌───────────────┐│  │ ┌───────────────┐│
-│ │   all-smi     │ │  │ │   all-smi     ││  │ │   all-smi     ││
-│ │(GPU+CPU+Mem)  │ │  │ │(GPU+CPU+Mem)  ││  │ │(GPU+CPU+Mem)  ││
-│ │    :9090      │ │  │ │    :9090      ││  │ │    :9090      ││
-│ └───────────────┘ │  │ └───────────────┘│  │ └───────────────┘│
-└───────────────────┘  └──────────────────┘  └──────────────────┘
+<!-- markdownlint-enable MD013 -->
+
+The optional cross-platform exporter Algalon integrates,
+[all-smi](https://github.com/lablup/all-smi), is also a Lablup project.
+
+## Architecture
+
+```text
+  GPU worker nodes (Docker Compose stacks or k3s DaemonSets)
+  ┌───────────────┬───────────────┬──────────────────┐
+  │ dcgm-exporter │ node-exporter │  all-smi (opt.)  │
+  │         :9400 │         :9100 │            :9090 │
+  └───────────────┴───────────────┴──────────────────┘
+                         │ scrape (30s, file_sd targets)
+                         ▼
+                   ┌───────────┐
+                   │  vmagent  │
+                   └─────┬─────┘
+                         │ remote write
+                         ▼
+             ┌───────────────────────┐      ┌───────────┐
+             │ VictoriaMetrics :8428 │◀────▶│  Grafana  │
+             └───────────┬───────────┘      │     :3000 │
+                         │ query            └───────────┘
+                         ▼
+                ┌────────────────┐
+                │ vmalert  :8880 │  6 rule groups
+                └───────┬────────┘
+                        │ fired alerts
+                        ▼
+              ┌─────────────────────┐
+              │ Alertmanager  :9093 │──▶ Slack (critical / warning)
+              └─────────────────────┘
 ```
 
-## 🚀 Quick Start
+`monitoring/` is the single source of truth for rules, dashboards, the
+scrape config, the Alertmanager policy and the DCGM counter set. Compose
+bind-mounts that directory; Helm packages it into ConfigMaps. Nothing is
+ever copied into `deploy/`.
 
-### Prerequisites
-- **For Terraform**: Terraform >= 1.6, Google Cloud account with appropriate permissions
-- **For Docker Compose**: Docker & Docker Compose
-- **Worker Nodes**: GPU with drivers (NVIDIA/Apple Silicon/NPU), appropriate container runtime
-- Network connectivity between host and worker nodes
+Alertmanager routes `severity="critical"` and `severity="warning"` to
+separate Slack webhooks, groups by `alertname`/`node`, and inhibits
+warnings for a node that is already paging critical.
 
-## 📦 Deployment Options
+## What Algalon watches
 
-Choose your deployment method based on your needs:
+Six rule groups in `monitoring/rules/`, each grounded in the report:
 
-### 🏗️ Terraform Deployment (Recommended for Production)
+- **`gpu-xid`** — XID error classification per report Table 3; severity
+  *is* the required recovery action (31/43/94 restart the app,
+  119/145/149 reset the GPU, 79 reboot the node), plus a catch-all for
+  unclassified XIDs.
+- **`gpu-ecc`** — row-remap degradation: uncorrectable remaps,
+  `ROW_REMAP_FAILURE`, pending remaps, double-bit ECC — and a 24h
+  *growth trend* rule, because report case gpu124 accumulated 254
+  correctable remaps over 55 days with zero XIDs before the GPU vanished.
+- **`gpu-health`** — thermal and clock-throttle health (report Table 8):
+  GPU and memory temperature bands, sustained hardware throttling.
+- **`node-precursor`** — peer-relative early signals from node_exporter
+  (interrupt-rate collapse, runnable-process collapse, page-out bursts)
+  per report §4.1.2, Figs 2–3. Warning-only and median-gated: finding F1
+  found no single dominant precursor across the tagged failures.
+- **`storage-nfs`** — checkpoint I/O phase detection (save/load bursts)
+  and NFS/RPC queueing per report §4.2: 93.1% of WRITE latency was
+  client-side queue time, so queue share is alerted directly. Requires
+  node_exporter `--collector.mountstats`.
+- **`meta`** — monitoring-of-monitoring: the `Watchdog` dead-man's
+  switch, exporter-down, and DCGM metrics missing while the target is up.
 
-**Production-ready cloud deployment with auto-scaling and infrastructure management.**
+Rule unit tests for these groups live in `tests/rules/`.
 
-Algalon's Terraform infrastructure provides modular, scalable deployment on Google Cloud Platform with automated GPU provisioning, monitoring setup, and security best practices.
+## Deployment
 
-#### Architecture Overview
+Three supported paths. All three consume the same `monitoring/` content.
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Monitoring    │    │     Worker      │    │     Worker      │
-│     Host        │◄───┤      Node       │    │      Node       │
-│                 │    │                 │    │                 │
-│  ┌─────────────┐│    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│  │   Grafana   ││    │ │   all-smi   │ │    │ │   all-smi   │ │
-│  │   :3000     ││    │ │   :9090     │ │    │ │   :9090     │ │
-│  └─────────────┘│    │ └─────────────┘ │    │ └─────────────┘ │
-│  ┌─────────────┐│    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│  │ VictoriaM.  ││    │ │    GPU      │ │    │ │    GPU      │ │
-│  │   :8428     ││    │ │  Hardware   │ │    │ │  Hardware   │ │
-│  └─────────────┘│    │ └─────────────┘ │    │ └─────────────┘ │
-│  ┌─────────────┐│    └─────────────────┘    └─────────────────┘
-│  │   VMAgent   ││
-│  └─────────────┘│
-└─────────────────┘
-```
+| Path | Best for | Guide |
+| --- | --- | --- |
+| Local k3s cluster | On-prem GPU clusters (**recommended**) | [`deploy/k3s/README.md`](deploy/k3s/README.md) |
+| Kubernetes / Helm | Existing clusters | [`deploy/helm/algalon/README.md`](deploy/helm/algalon/README.md) |
+| Docker Compose | Single node, development, small fleets | [`deploy/compose/README.md`](deploy/compose/README.md) |
 
-#### Quick Start with Terraform
+### Local k3s cluster (recommended for on-prem)
+
+Training workloads keep running under Docker; a k3s agent runs
+*alongside* Docker on each GPU node and schedules only the exporter
+DaemonSets. The two container stacks share no state — k3s ships its own
+embedded containerd — so the entire conflict surface is host networking,
+which the shipped preflight script checks before anything is installed.
 
 ```bash
-# Clone repository
-git clone https://github.com/appleparan/Algalon.git
-cd Algalon/terraform/examples/training-cluster
-
-# Configure deployment
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your project settings
-
-# Deploy infrastructure
-terraform init
-terraform apply
+./deploy/k3s/preflight.sh server      # read-only checks, PASS/WARN/FAIL
+./deploy/k3s/install-server.sh        # k3s server, default addons disabled
+make helm-sync
+helm install algalon deploy/helm/algalon --namespace algalon \
+  --create-namespace --set alertmanager.slack.existingSecret=algalon-slack
+K3S_URL=https://<server>:6443 K3S_TOKEN=<token> \
+  ./deploy/k3s/install-agent.sh       # on every GPU node
 ```
 
-#### Deployment Options
+Both installers refuse to run when k3s is already present; removal is a
+deliberate manual step documented in the runbook.
 
-**1. Host-Only Deployment (Default)**
-Perfect for setting up monitoring infrastructure first or hybrid scenarios:
-```bash
-terraform apply
-# Creates only monitoring host (worker_count = 0)
-```
+### Kubernetes / Helm
 
-**2. Full Training Cluster**
-Deploy with GPU workers for distributed training:
-```bash
-terraform apply -var="worker_count=4" -var="gpu_count=2"
-# Creates monitoring host + 4 workers with 2 GPUs each = 8 total GPUs
-```
+Exporters as DaemonSets on the GPU nodes, the host stack
+(VictoriaMetrics, vmagent, vmalert, Alertmanager, Grafana) as
+Deployments. `make helm-sync` must run before the first install — the
+chart's `files/` directory is generated from `monitoring/` and is
+git-ignored.
 
-#### Configuration Examples
+### Docker Compose
 
-**Small Training Setup (2 GPUs)**
-```hcl
-# terraform.tfvars
-project_id = "your-gcp-project"
-deployment_name = "algalon-dev"
-worker_count = 1
-gpu_count = 2
-gpu_type = "nvidia-tesla-t4"
-```
+Two stacks: `deploy/compose/host` (storage, alerting, UI) and
+`deploy/compose/worker` (exporters, one per GPU node). all-smi is opt-in
+via `--profile all-smi`.
 
-**Large Training Setup (16 GPUs)**
-```hcl
-project_id = "your-gcp-project"
-deployment_name = "algalon-prod"
-worker_count = 4
-gpu_count = 4
-gpu_type = "nvidia-tesla-v100"
-```
+Slack webhook URLs are always injected as secrets or environment
+variables. None are stored in git, and Alertmanager refuses to render
+without them rather than shipping a silently broken notifier.
 
-**Cost-Optimized with Preemptible Instances**
-```hcl
-project_id = "your-gcp-project"
-worker_count = 2
-gpu_count = 2
-gpu_type = "nvidia-tesla-t4"
-use_preemptible_workers = true
-```
+## Dashboards
 
-#### What You Get
-- ✅ **Automated Infrastructure**: VPC, firewall rules, compute instances
-- ✅ **GPU-Optimized Scaling**: Automatic instance calculation based on total GPU needs
-- ✅ **Cost Optimization**: Preemptible instances and auto-shutdown
-- ✅ **Security**: Restricted access and service accounts
-- ✅ **Monitoring**: Built-in logging and monitoring integration
-- ✅ **Single Zone Deployment**: All workers in same zone for optimal training performance
+Five Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+into the **Algalon** folder:
 
-#### Key Features
+- **Alert Center** — live `ALERTS` table: what is firing right now, by
+  severity and node.
+- **GPU Fleet Overview** — node × GPU heatmaps for utilization,
+  temperature and ECC/remap state.
+- **Node Health (Precursors)** — peer-band views of the precursor
+  metrics, showing each node against the cluster median.
+- **Checkpoint & Storage I/O** — checkpoint save/load phase bands from
+  the `algalon:checkpoint_*` recording rules, plus the NFS queue-time
+  breakdown.
+- **all-smi (Optional)** — cross-platform hardware view; populated only
+  when the all-smi profile is enabled.
 
-| Feature | Description | Benefit |
-|---------|-------------|---------|
-| **GPU-focused design** | Specify total GPU count, module calculates instances | Simplified scaling |
-| **Single zone deployment** | All instances in same zone | Optimal training communication |
-| **Automatic scaling** | `instance_count = ceil(total_gpu_count / gpus_per_instance)` | Efficient resource allocation |
-| **Training optimized** | No autoscaling disruption | Stable training workloads |
+## Development
 
-#### GPU Types & Use Cases
+Validation runs against the repo, not against a live cluster — every
+target below is a container invocation of the real upstream validator.
 
-| Type | Use Case | Cost | Performance |
-|------|----------|------|-------------|
-| `nvidia-tesla-t4` | Inference, development | Low | Good |
-| `nvidia-tesla-v100` | Training, research | Medium | High |
-| `nvidia-tesla-a100` | Large models, production | High | Highest |
+| Target | Checks |
+| --- | --- |
+| `make rules-validate` | `vmalert -dryRun` on the rule files |
+| `make rules-test` | Rule unit tests from `tests/rules/` |
+| `make scrape-validate` | `vmagent -promscrape.config -dryRun` |
+| `make alertmanager-validate` | `amtool check-config` |
+| `make compose-validate` | Both stacks, with and without profiles |
+| `make dashboards-validate` | Dashboard JSON conventions |
+| `make helm-validate` | `helm lint` + `template \| kubeconform` |
 
-#### Security Configuration
-
-```hcl
-# Production security settings
-grafana_allowed_ips = ["YOUR_IP/32"]
-ssh_allowed_ips = ["YOUR_OFFICE_CIDR/24"]
-enable_worker_external_ip = false
-reserve_static_ip = true
-```
-
-#### Deployment Examples
-
-**Development Environment**
-```bash
-cd terraform/examples/training-cluster
-terraform apply \
-  -var="deployment_name=algalon-dev" \
-  -var="worker_count=1" \
-  -var="use_preemptible_workers=true"
-```
-
-**Production Environment**
-```bash
-terraform apply \
-  -var="deployment_name=algalon-prod" \
-  -var="worker_count=3" \
-  -var="gpu_type=nvidia-tesla-v100" \
-  -var="reserve_static_ip=true"
-```
-
-**Multi-Environment Setup**
-```bash
-# Development
-terraform apply -var="environment_name=dev" -var="use_preemptible_workers=true"
-
-# Staging
-terraform apply -var="environment_name=staging" -var="worker_count=2"
-
-# Production
-terraform apply -var="environment_name=prod" -var="worker_count=5" -var="gpu_type=nvidia-tesla-a100"
-```
-
-**Host-Only Deployment (Hybrid)**
-Perfect for scenarios where workers are on-premise or managed separately:
-```bash
-cd terraform/examples/host-only
-terraform apply
-# Creates only monitoring host for manual worker registration
-```
-
-Benefits of Host-Only deployment:
-- **Hybrid Cloud-OnPremise**: Monitor on-premise workers from cloud host
-- **Flexible Worker Management**: Add/remove workers dynamically
-- **Cost Optimization**: Only pay for monitoring infrastructure
-- **Security**: Workers behind firewalls, only outbound connections needed
-
-After deploying host-only, register workers manually or update the configuration:
-```bash
-# Method 1: Update terraform.tfvars
-worker_targets = "10.0.1.100:9090,10.0.1.101:9090"
-terraform apply
-
-# Method 2: Deploy workers using Docker Compose
-cd algalon_worker
-./setup.sh --version v0.9.0 --port 9090
-```
-
-#### Outputs & Access
-
-After deployment, you'll get:
-- **Grafana URL**: Dashboard for monitoring
-- **VictoriaMetrics URL**: Direct metrics access
-- **SSH commands**: Access to all instances
-- **Worker endpoints**: For training job submission
+Run all seven before committing:
 
 ```bash
-# Access Grafana
-open $(terraform output -raw grafana_url)
-
-# SSH to monitoring host
-eval $(terraform output -raw ssh_commands.monitoring_host)
-
-# Test worker metrics
-curl $(terraform output -json worker_metrics_endpoints | jq -r '.[0]')
+make rules-validate rules-test scrape-validate alertmanager-validate \
+  compose-validate dashboards-validate helm-validate
 ```
 
-#### Troubleshooting
-
-**Common Issues:**
-1. **Setup Fails**: Check `/var/log/algalon-setup.log`
-2. **No GPU Detected**: Verify GPU quota and instance type
-3. **Network Issues**: Check firewall rules and VPC configuration
-4. **Workers Not in Grafana**: Verify VMAgent targets configuration
-
-**Monitoring Deployment**
-```bash
-# List all instances
-gcloud compute instances list --filter="labels.component:algalon"
-
-# Check setup logs
-gcloud compute ssh INSTANCE_NAME --command="sudo tail -f /var/log/algalon-setup.log"
-
-# Test services
-curl -f http://WORKER_IP:9090/metrics
-curl -f http://MONITORING_IP:3000/api/health
-```
-
-### 🐋 Docker Compose Deployment
-
-**Flexible local deployment for development and testing.**
-
-#### Quick Start Options
+An end-to-end smoke test brings the whole pipeline up in a disposable
+k3d cluster and asserts that rules are loaded, the watchdog reaches
+Alertmanager, node scraping works and the GPU-only DaemonSets stay
+unscheduled:
 
 ```bash
-# Make script executable
-chmod +x setup.sh
-
-# Single node setup (development/testing)
-./setup.sh --single-node
-
-# Distributed setup
-./setup.sh --host     # On monitoring host
-./setup.sh --worker   # On each GPU worker node
+make e2e-k3d      # requires docker, k3d, helm, kubectl; takes a few minutes
 ```
 
-#### Advanced Configuration
+CI runs the validation gate on every push and the k3d smoke test as a
+follow-on job. Contributor conventions and the non-obvious constraints of
+this codebase are documented in [`AGENTS.md`](AGENTS.md).
 
-**Custom all-smi Version, Port, and Interval:**
-```bash
-# Use specific all-smi version
-./setup.sh --worker --version v0.8.0
+## License
 
-# Use custom port and interval
-./setup.sh --worker --port 8080 --interval 10
-
-# Full customization
-./setup.sh --worker --version v0.9.0 --port 9091 --interval 3
-```
-
-**Available Options:**
-- **Versions**: `v0.9.0` (default), `v0.8.0`, `main`
-- **Ports**: Any available port (default: 9090)
-- **Intervals**: Collection interval in seconds (default: 5)
-
-#### Component-Specific Setup
-
-**Host with Dynamic Targets:**
-```bash
-cd algalon_host
-./setup.sh --targets "worker1:9090,worker2:9090,10.0.1.100:9091"
-```
-
-**Worker with Full Configuration:**
-```bash
-cd algalon_worker
-./setup.sh --version v0.9.0 --port 9090 --interval 5
-```
-
-### Manual Setup (Advanced Users)
-
-#### Option 1: Using Environment Variables
-```bash
-# Worker setup with custom configuration
-cd algalon_worker
-export ALL_SMI_VERSION=v0.9.0
-export ALL_SMI_PORT=9090
-export ALL_SMI_INTERVAL=5
-docker compose build
-docker compose up -d
-```
-
-#### Option 2: Using .env File
-```bash
-# Copy example configuration
-cd algalon_worker
-cp .env.example .env
-
-# Edit .env file with your preferred settings
-# ALL_SMI_VERSION=v0.9.0
-# ALL_SMI_PORT=9090
-# ALL_SMI_INTERVAL=5
-
-docker compose build
-docker compose up -d
-```
-
-### Post-Deployment Configuration
-
-#### For Distributed Setup
-
-1. **Update worker targets** dynamically:
-   ```bash
-   cd algalon_host
-   ./generate-targets.sh --targets "192.168.1.100:9090,192.168.1.101:9090" --cluster production
-   ```
-
-   Or manually edit `algalon_host/node/targets/all-smi-targets.yml`:
-   ```yaml
-   - targets:
-       - '192.168.1.100:9090'  # Replace with actual worker IPs
-       - '192.168.1.101:9090'  # Add more workers as needed
-     labels:
-       job: 'all-smi'
-       cluster: 'production'
-   ```
-
-2. **Restart VMAgent** to discover new workers:
-   ```bash
-   cd algalon_host
-   docker compose restart vmagent
-   ```
-
-3. **Verify connectivity**:
-   ```bash
-   # Test worker endpoints
-   curl -f http://worker-ip:9090/metrics
-   
-   # Check multiple workers
-   for ip in 192.168.1.100 192.168.1.101; do
-     echo "Testing $ip:9090"
-     curl -f http://$ip:9090/metrics >/dev/null && echo "✅ OK" || echo "❌ Failed"
-   done
-   ```
-
-#### Access Points
-- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
-- **VictoriaMetrics UI**: http://localhost:8428
-- **Worker Metrics**: http://worker-ip:9090/metrics
-
-#### Configuration Options
-- **Port**: Default `9090` (configurable via `--port` option)
-- **Interval**: Default `5` seconds (configurable via `--interval` option)
-- **Targets**: Dynamic configuration with environment variables
-- **Firewall**: Ensure configured ports are accessible
-
-## ☁️ Cloud Deployment
-
-### Google Cloud Platform
-
-Deploy Algalon on GCP with full automation:
-
-```bash
-# Quick cloud deployment
-cd terraform/examples/basic
-terraform init
-terraform apply
-```
-
-**Features:**
-- **Auto-scaling**: Managed instance groups with health checks
-- **Cost Optimization**: Preemptible instances and resource scheduling
-- **Security**: VPC isolation and IAM service accounts
-- **Monitoring**: Cloud Logging and Monitoring integration
-
-### Other Cloud Providers
-
-- **AWS**: Adapt Terraform modules for EC2 and Auto Scaling Groups
-- **Azure**: Use Azure Resource Manager templates
-- **Multi-cloud**: Kubernetes deployment with cluster autoscaling
-
-**👉 [See complete cloud deployment guide](CLOUD_DEPLOYMENT.md)**
-
-## 📊 Dashboard Overview
-
-### GPU Monitoring Dashboard (DCGM-based)
-- **GPU Utilization Timeline**: Real-time GPU usage across all devices
-- **Memory Utilization Timeline**: VRAM usage tracking
-- **Memory Usage Breakdown**: Used vs Total memory visualization  
-- **Temperature Monitoring**: GPU thermal status
-- **Current Status Bars**: Instant utilization overview
-
-### All-SMI Hardware Monitoring Dashboard (NEW)
-- **GPU Metrics**: Utilization, memory usage, temperature, power consumption
-- **CPU Monitoring**: System-wide CPU utilization
-- **Memory Usage**: System memory utilization percentage
-- **Disk Metrics**: Available space and utilization by device
-- **Process Monitoring**: Top processes with CPU/memory usage (table view)
-- **Multi-platform Support**: Works with NVIDIA, Apple Silicon, NPUs, etc.
-
-### System Monitoring Dashboard (Legacy)
-- **CPU Utilization**: Per-core and per-socket CPU usage
-- **System Memory Usage**: Total and used system memory
-- **Process Monitoring**: GPU process-level resource allocation
-
-### Dashboard Access
-- **All-SMI Dashboard**: Comprehensive hardware monitoring for all-smi nodes
-- **GPU Dashboard**: DCGM-based monitoring for NVIDIA-specific setups
-- **System Dashboard**: Additional system metrics and legacy support
-
-### Sample View
-```
-🖥️  GPU Monitoring:
-GPU 0 Utilization: ████████░░ 85%
-GPU 1 Utilization: ██████░░░░ 62%
-GPU 2 Utilization: ███░░░░░░░ 31%
-
-💻 System Monitoring:
-CPU 0-3: ██████░░░░ 65%
-Memory:   ████████░░ 82% (6.2GB/8GB)
-Processes: 3 GPU tasks running
-```
-
-## 🛠️ Configuration
-
-### Monitored Metrics
-**GPU Metrics**:
-- GPU Utilization (%)
-- VRAM Utilization (%)
-- VRAM Usage (Used/Total)
-- GPU Temperature
-- Power Consumption
-- Clock Frequencies
-
-**System Metrics** (NEW):
-- CPU Utilization per core/socket
-- System Memory Usage
-- Process-level GPU allocation
-- Platform-specific metrics
-
-### Customization
-- Configure all-smi API parameters in docker-compose.yml
-- Modify dashboard panels in Grafana UI
-- Adjust retention period in VictoriaMetrics settings
-- Add custom labels in all-smi-targets.yml for multi-platform setups
-
-## 🔧 Troubleshooting
-
-### Verify Hardware Access
-```bash
-# For NVIDIA GPUs
-docker run --rm --gpus all nvidia/cuda:11.0-base-ubuntu20.04 nvidia-smi
-
-# Test all-smi directly
-docker run --rm --gpus all ghcr.io/inureyes/all-smi:latest
-```
-
-### Check Service Status
-```bash
-docker compose ps
-docker compose logs all-smi
-
-# Test metrics endpoint
-curl http://localhost:9090/metrics | grep all_smi
-```
-
-### API Testing with curl
-
-The all-smi service provides a comprehensive Prometheus metrics endpoint. Test various aspects of the API:
-
-```bash
-# Basic connectivity test
-curl -f http://localhost:9090/metrics
-
-# Check GPU metrics (NVIDIA/Apple Silicon/NPU)
-curl -s http://localhost:9090/metrics | grep -E "(gpu|cuda|metal|npu)"
-
-# Monitor CPU metrics
-curl -s http://localhost:9090/metrics | grep -E "(cpu|core)"
-
-# Check memory utilization
-curl -s http://localhost:9090/metrics | grep -E "(memory|mem)"
-
-# View temperature sensors
-curl -s http://localhost:9090/metrics | grep temperature
-
-# Check power consumption
-curl -s http://localhost:9090/metrics | grep power
-
-# Process-level monitoring (if --processes enabled)
-curl -s http://localhost:9090/metrics | grep process
-
-# Get specific metric with value
-curl -s http://localhost:9090/metrics | grep "all_smi_gpu_utilization"
-
-# Monitor in real-time (updates every 5 seconds by default)
-watch -n 5 'curl -s http://localhost:9090/metrics | grep "all_smi_gpu_utilization"'
-```
-
-#### Remote Worker Testing
-```bash
-# Test remote worker connectivity
-curl -f http://worker-ip:9090/metrics
-
-# Check multiple workers
-for ip in 10.0.1.100 10.0.1.101; do
-  echo "Testing worker: $ip"
-  curl -f http://$ip:9090/metrics >/dev/null && echo "✅ OK" || echo "❌ Failed"
-done
-```
-
-#### Platform-Specific Metrics
-```bash
-# NVIDIA GPU metrics
-curl -s http://localhost:9090/metrics | grep -E "(nvidia|cuda)"
-
-# Apple Silicon metrics
-curl -s http://localhost:9090/metrics | grep -E "(apple|metal)"
-
-# NPU/AI accelerator metrics  
-curl -s http://localhost:9090/metrics | grep -E "(npu|ai|tpu)"
-
-# Generic platform detection
-curl -s http://localhost:9090/metrics | grep "all_smi_info"
-```
-
-### Troubleshooting
-
-#### Setup Script Issues
-```bash
-# Check script permissions
-ls -la setup.sh  # Should show executable permissions
-
-# View script help
-./setup.sh --help
-cd algalon_worker && ./setup.sh --help
-
-# Check Docker installation
-docker --version
-docker compose version
-```
-
-#### Build Issues
-```bash
-# Check build logs
-cd algalon_worker
-docker compose build --no-cache
-
-# Verify environment variables
-echo $ALL_SMI_VERSION
-echo $ALL_SMI_PORT
-
-# Manual build with specific version
-export ALL_SMI_VERSION=v0.9.0
-export ALL_SMI_PORT=9090
-docker compose build
-```
-
-#### Runtime Issues
-- **No metrics**: Ensure appropriate GPU runtime is installed (nvidia-docker2 for NVIDIA)
-- **Permission denied**: Check Docker daemon has hardware access
-- **Dashboard not loading**: Wait 30 seconds for all services to initialize
-- **Platform not detected**: Verify all-smi supports your hardware platform
-- **Port conflicts**: Check if port is already in use (`netstat -tulpn | grep :9090`)
-- **Version issues**: Try using a different all-smi version (`--version v0.8.0`)
-
-#### Network Issues
-```bash
-# Test worker connectivity from host
-curl -f http://worker-ip:9090/metrics
-
-# Check Docker network
-docker network ls
-docker network inspect algalon_worker_monitoring
-
-# Verify port mapping
-docker compose ps
-```
-
-## 📈 Scaling & Production
-
-### Adding Worker Nodes
-
-#### Standard Setup
-```bash
-# On new GPU node
-./setup.sh --worker
-
-# On monitoring host - add to targets file
-echo "    - 'new-worker-ip:9090'" >> algalon_host/node/targets/all-smi-targets.yml
-
-# Restart VMAgent to discover new worker
-cd algalon_host && docker compose restart vmagent
-```
-
-#### Custom Configuration
-```bash
-# Worker with custom port
-./setup.sh --worker --port 8080
-
-# Worker with specific version
-./setup.sh --worker --version v0.8.0
-
-# Update host targets accordingly
-echo "    - 'new-worker-ip:8080'" >> algalon_host/node/targets/all-smi-targets.yml
-```
-
-### Multi-Cluster Support
-```yaml
-# Different clusters with platform labels
-- targets: ['10.0.1.100:9090', '10.0.1.101:9090']
-  labels: {cluster: 'production', platform: 'nvidia', datacenter: 'dc1'}
-- targets: ['10.0.2.100:9090', '10.0.2.101:9090'] 
-  labels: {cluster: 'staging', platform: 'apple', datacenter: 'dc2'}
-- targets: ['10.0.3.100:9090']
-  labels: {cluster: 'edge', platform: 'jetson', datacenter: 'dc3'}
-```
-
-### High Availability
-- Deploy multiple VictoriaMetrics instances with clustering
-- Use Grafana's multi-datasource features for failover
-- Consider Kubernetes deployment for orchestration
-
-### Security Considerations
-- Restrict port 9090 access to monitoring hosts only
-- Use VPN or private networks for worker communication  
-- Monitor resource usage of all-smi exporters
-- Implement platform-specific security policies
-
-## 🎯 Deployment Examples
-
-### Scenario 1: Development Setup
-
-**Docker Compose (Local):**
-```bash
-# Single machine with GPU for testing
-./setup.sh --single-node
-
-# Custom port and interval
-./setup.sh --single-node --port 9091 --interval 10
-```
-
-**Terraform (Cloud):**
-```bash
-cd terraform/examples/basic
-terraform apply -var="deployment_name=algalon-dev" \
-                -var="worker_count=1" \
-                -var="use_preemptible_workers=true"
-```
-
-### Scenario 2: Small Production Cluster
-
-**Docker Compose:**
-```bash
-# Monitoring host
-./setup.sh --host --targets "192.168.1.20:9090,192.168.1.21:9090"
-
-# GPU workers
-./setup.sh --worker --interval 5
-```
-
-**Terraform:**
-```bash
-cd terraform/examples/basic
-terraform apply -var="deployment_name=algalon-prod" \
-                -var="worker_count=3" \
-                -var="gpu_type=nvidia-tesla-v100" \
-                -var="create_static_ip=true"
-```
-
-### Scenario 3: Auto-scaling Production
-
-**Terraform with Managed Instance Groups:**
-```bash
-cd terraform/examples/production
-terraform apply -var="enable_autoscaling=true" \
-                -var="autoscaling_min_replicas=2" \
-                -var="autoscaling_max_replicas=10"
-```
-
-### Scenario 4: Multi-Environment Setup
-
-**Development + Staging + Production:**
-```bash
-# Development
-terraform apply -var="environment_name=dev" \
-                -var="use_preemptible_workers=true"
-
-# Staging
-terraform apply -var="environment_name=staging" \
-                -var="worker_count=2"
-
-# Production
-terraform apply -var="environment_name=prod" \
-                -var="worker_count=5" \
-                -var="gpu_type=nvidia-tesla-a100"
-```
-
-## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
-- Additional dashboard templates and alert rules
-- Cloud provider modules (AWS, Azure, etc.)
-- Kubernetes deployment manifests
-- Custom metric collections and exporters
-- Security enhancements and compliance features
-
-**Testing Infrastructure:**
-- Comprehensive test suite with GitHub Actions
-- Unit, integration, and E2E tests
-- Security scanning and compliance checking
-- Cost estimation and optimization
-
-**👉 [See testing guide](TESTING.md)**
-
-## 🙏 Credits
-
-This project is powered by **[all-smi](https://github.com/inureyes/all-smi)** - A comprehensive hardware monitoring tool that provides unified metrics collection across multiple platforms including NVIDIA GPUs, Apple Silicon, Jetson devices, and NPUs.
-
-Special thanks to the all-smi project for enabling cross-platform hardware monitoring and making it possible to create truly universal GPU monitoring solutions.
-
-## 📝 License
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-See the [LICENSE](LICENSE) file for the full license text.
+Licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE) for the full text.
 
 ---
 
-*Named after Algalon the Observer - watching over your GPUs with cosmic precision* ⭐
+*Named after Algalon the Observer — watching over your GPUs with cosmic
+precision.*

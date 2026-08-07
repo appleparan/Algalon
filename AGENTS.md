@@ -3,7 +3,7 @@
 Multi-platform GPU cluster monitoring and **alert center**: DCGM-exporter +
 node_exporter (+ optional all-smi) → VMAgent → VictoriaMetrics → vmalert →
 Alertmanager → Slack, with Grafana dashboards. Deployable via Docker Compose,
-Helm, and Terraform (GCP).
+Helm, and local k3s clusters (`deploy/k3s/`, recommended for on-prem).
 
 Design rationale and full architecture:
 `docs/superpowers/specs/2026-08-07-alert-center-design.md`. Alert rules encode
@@ -57,6 +57,7 @@ analysis).
 ## Verification
 
 - Rules: `vmalert -dryRun` + rule unit tests
+- Scrape config: `vmagent -promscrape.config -dryRun`
 - Compose: `docker compose config` (both stacks, with and without profiles)
 - Alertmanager: `amtool check-config`
 - Dashboards: jq convention checks
