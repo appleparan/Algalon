@@ -1,0 +1,191 @@
+rule_files:
+  - ../../monitoring/rules/slurm.yml
+
+evaluation_interval: 30s
+
+tests:
+  # --- SlurmNodeDown ---------------------------------------------------
+  # Queue exporter reports 2 nodes DOWN; must page once the 5m hold passes
+  # and stay silent before it.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="down", instance="slurmctld.example:9092"}'
+        values: '0 0 2x20'
+    alert_rule_test:
+      - eval_time: 7m
+        groupname: slurm
+        alertname: SlurmNodeDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              action: investigate
+              state: down
+              instance: slurmctld.example:9092
+            exp_annotations:
+              summary: '2 Slurm node(s) DOWN'
+      # Only 2m above threshold at 3m -> still pending, nothing fires.
+      - eval_time: 3m
+        groupname: slurm
+        alertname: SlurmNodeDown
+        exp_alerts: []
+
+  # Negative: a healthy cluster reports 0 DOWN nodes; the series exists but
+  # never crosses the threshold.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="down", instance="slurmctld.example:9092"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 8m
+        groupname: slurm
+        alertname: SlurmNodeDown
+        exp_alerts: []
+
+  # --- SlurmNodeDrained ------------------------------------------------
+  # One node left in drain long enough (10m) to look forgotten rather than
+  # deliberately parked for a short maintenance window.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="drain", instance="slurmctld.example:9092"}'
+        values: '0 1x30'
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: slurm
+        alertname: SlurmNodeDrained
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              state: drain
+              instance: slurmctld.example:9092
+            exp_annotations:
+              summary: '1 Slurm node(s) DRAINED'
+      # 4.5m of drain at 5m -> short maintenance, must stay quiet.
+      - eval_time: 5m
+        groupname: slurm
+        alertname: SlurmNodeDrained
+        exp_alerts: []
+      # A drained node is not a down node.
+      - eval_time: 12m
+        groupname: slurm
+        alertname: SlurmNodeDown
+        exp_alerts: []
+
+  # Negative: nothing drained.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="drain", instance="slurmctld.example:9092"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: slurm
+        alertname: SlurmNodeDrained
+        exp_alerts: []
+
+  # --- SlurmJobFailureSpike --------------------------------------------
+  # Cumulative failed-job counter jumps 2 -> 9 inside the 30m window.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="failed", instance="slurmctld.example:9092"}'
+        values: '2x60 9x60'
+    alert_rule_test:
+      - eval_time: 45m
+        groupname: slurm
+        alertname: SlurmJobFailureSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              state: failed
+              instance: slurmctld.example:9092
+            exp_annotations:
+              summary: '7 Slurm job(s) entered failed state in the last 30m'
+
+  # Negative: 2 failures in 30m is normal attrition, below the >3 threshold.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="failed", instance="slurmctld.example:9092"}'
+        values: '2x60 4x60'
+    alert_rule_test:
+      - eval_time: 45m
+        groupname: slurm
+        alertname: SlurmJobFailureSpike
+        exp_alerts: []
+
+  # --- SlurmQueueStalledWithIdleNodes ----------------------------------
+  # 5 jobs pending for 30m while 3 nodes sit idle -> scheduler/partition
+  # misconfiguration, not a capacity shortage.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="pending", instance="slurmctld.example:9092"}'
+        values: '5x80'
+      - series: 'slurm_node_count_per_state{state="idle", instance="slurmctld.example:9092"}'
+        values: '3x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: slurm
+        alertname: SlurmQueueStalledWithIdleNodes
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              state: pending
+              instance: slurmctld.example:9092
+            exp_annotations:
+              summary: '5 Slurm job(s) pending for 30m while nodes sit idle - check partition/QOS limits'
+      # Only 10m of stall -> below the 30m hold.
+      - eval_time: 10m
+        groupname: slurm
+        alertname: SlurmQueueStalledWithIdleNodes
+        exp_alerts: []
+
+  # Negative (required by the brief): pending work exists but every node is
+  # busy (idle == 0). A full cluster with a queue is healthy, not stalled.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="pending", instance="slurmctld.example:9092"}'
+        values: '5x80'
+      - series: 'slurm_node_count_per_state{state="idle", instance="slurmctld.example:9092"}'
+        values: '0x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: slurm
+        alertname: SlurmQueueStalledWithIdleNodes
+        exp_alerts: []
+
+  # --- SlurmJobGpuIdle --------------------------------------------------
+  # Two concurrent jobs from the per-node job exporter:
+  #   12345 (alice, gpu01) averages 4% across its 2 GPUs   -> wasting the
+  #                                                           allocation
+  #   67890 (bob,   gpu02) averages exactly 10%            -> boundary case,
+  #                                                           must NOT fire
+  # Exactly one alert may be produced, carrying slurmjobid/user/node into
+  # Slack.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_utilization_gpu{slurmjobid="12345", user="alice", node="gpu01", gpu="0", instance="gpu01.example:9798"}'
+        values: '5x80'
+      - series: 'slurm_job_utilization_gpu{slurmjobid="12345", user="alice", node="gpu01", gpu="1", instance="gpu01.example:9798"}'
+        values: '3x80'
+      - series: 'slurm_job_utilization_gpu{slurmjobid="67890", user="bob", node="gpu02", gpu="0", instance="gpu02.example:9798"}'
+        values: '8x80'
+      - series: 'slurm_job_utilization_gpu{slurmjobid="67890", user="bob", node="gpu02", gpu="1", instance="gpu02.example:9798"}'
+        values: '12x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: slurm
+        alertname: SlurmJobGpuIdle
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              slurmjobid: "12345"
+              user: alice
+              node: gpu01
+            exp_annotations:
+              summary: 'Job 12345 (user alice) is holding GPUs on gpu01 below 10% utilization for 30m'
+      # Idle for only 10m -> below the 30m hold, no page yet.
+      - eval_time: 10m
+        groupname: slurm
+        alertname: SlurmJobGpuIdle
+        exp_alerts: []
