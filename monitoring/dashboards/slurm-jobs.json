@@ -386,7 +386,7 @@
           "editorMode": "code",
           "expr": "slurm_job_utilization_gpu{slurmjobid=\"$job_id\"}",
           "instant": false,
-          "legendFormat": "GPU {{gpu}}",
+          "legendFormat": "{{node}} GPU {{gpu}}",
           "range": true,
           "refId": "A"
         }
@@ -483,7 +483,7 @@
           "editorMode": "code",
           "expr": "slurm_job_memory_usage_gpu{slurmjobid=\"$job_id\"}",
           "instant": false,
-          "legendFormat": "GPU {{gpu}}",
+          "legendFormat": "{{node}} GPU {{gpu}}",
           "range": true,
           "refId": "A"
         }
@@ -581,7 +581,7 @@
           "editorMode": "code",
           "expr": "slurm_job_power_gpu{slurmjobid=\"$job_id\"} / 1000",
           "instant": false,
-          "legendFormat": "GPU {{gpu}}",
+          "legendFormat": "{{node}} GPU {{gpu}}",
           "range": true,
           "refId": "A"
         }

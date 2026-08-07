@@ -10,7 +10,10 @@ GPU를 리셋할지, 노드를 리부팅할지 — 를 운영자에게 알려줍
 노드에서 DCGM, OS, 그리고 선택적으로 크로스 플랫폼 하드웨어 메트릭을 수집해
 VictoriaMetrics에 저장하고, 엄선된 여섯 개의 alert rule 그룹을 vmalert로
 평가한 뒤 Alertmanager를 거쳐 Slack으로 라우팅하며, 전체 상황을 다섯 개의
-Grafana 대시보드로 보여줍니다.
+Grafana 대시보드로 보여줍니다. 선택 사항인
+[Slurm 연동](docs/ko/slurm.md)을 켜면 rule 그룹 하나와 대시보드 두 개가
+더해져 스케줄러 큐 상태와 잡 단위 어카운팅까지 다루므로, 놀고 있는 GPU를
+붙잡은 잡과 사용자를 짚어낼 수 있습니다.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
@@ -82,6 +85,7 @@ Docker 기반 학습 워크로드와 어떻게 공존하는지 설명합니다.
 | [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 여섯 개 rule 그룹, 알림 정책, 다섯 개 대시보드 |
 | [배포](docs/ko/deployment.md) | 배포 방식 선택, k3s와 Docker 공존, 시크릿 관리 |
 | [개발](docs/ko/development.md) | 검증 타깃, rule 유닛 테스트, k3d 엔드투엔드 스모크 테스트 |
+| [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인 |
 
 English documentation is in [`docs/`](docs/).
 

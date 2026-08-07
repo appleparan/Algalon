@@ -11,6 +11,9 @@ collects DCGM, OS and (optionally) cross-platform hardware metrics from
 every GPU node, stores them in VictoriaMetrics, evaluates six curated
 alert rule groups with vmalert, routes the results through Alertmanager
 to Slack, and renders the whole picture in five Grafana dashboards.
+Optional [Slurm integration](docs/slurm.md) adds a seventh rule group and
+two more dashboards covering scheduler queue state and per-job accounting,
+so an idle GPU can be named with the job and the user holding it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
@@ -84,6 +87,7 @@ explains how the k3s path coexists with Docker-based training workloads.
 | [Architecture](docs/architecture.md) | Component pipeline, the six rule groups, the alerting policy, the five dashboards |
 | [Deployment](docs/deployment.md) | Choosing a path, k3s + Docker coexistence, secrets handling |
 | [Development](docs/development.md) | Validation targets, rule unit tests, the k3d end-to-end smoke test |
+| [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join |
 
 한국어 문서는 [`docs/ko/`](docs/ko/)에 있습니다.
 
