@@ -57,6 +57,14 @@ K3S_URL=https://<server>:6443 K3S_TOKEN=<token> \
 Deployment로 뜹니다. vmagent가 Kubernetes API를 통해 exporter 파드를
 디스커버리하므로 scrape 타깃을 손으로 관리할 일이 없습니다.
 
+클러스터 멤버가 아닌 머신 — 자체 exporter를 돌리는 베어메탈 GPU 노드,
+Slurm 컨트롤러 — 은 `dcgmExporter.staticTargets` /
+`nodeExporter.staticTargets`(그리고 Slurm exporter용 `slurm.*Targets`)에
+정적으로 등록합니다. 정적 항목도 DaemonSet 파드와 동일한 `job`·`node` 라벨
+계약을 따릅니다. 자세한 내용은
+[차트 README](../../deploy/helm/algalon/README.md#scraping-and-labels)를
+참고하세요.
+
 한 가지 기억할 것: 최초 설치 전에 반드시 `make helm-sync`를 실행해야
 합니다. Helm은 차트 바깥의 파일을 읽을 수 없어서, 차트의 `files/`
 디렉터리를 `monitoring/`에서 생성하며 이 디렉터리는 git에서 제외됩니다.

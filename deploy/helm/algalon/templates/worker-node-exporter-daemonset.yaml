@@ -41,6 +41,9 @@ spec:
             - --path.sysfs=/host/sys
             - --path.rootfs=/rootfs
             - --collector.mountstats
+            {{- if .Values.nodeExporter.textfileDirectory }}
+            - --collector.textfile.directory={{ .Values.nodeExporter.textfileDirectory }}
+            {{- end }}
             - --web.listen-address=:{{ .Values.nodeExporter.port }}
           ports:
             - name: metrics
@@ -57,6 +60,13 @@ spec:
             - name: rootfs
               mountPath: /rootfs
               readOnly: true
+            {{- if .Values.nodeExporter.textfileDirectory }}
+            # Mounted at its host path so *.prom files written by host-side
+            # collectors are read from the same location the operator knows.
+            - name: textfile
+              mountPath: {{ .Values.nodeExporter.textfileDirectory }}
+              readOnly: true
+            {{- end }}
           {{- with .Values.nodeExporter.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -71,4 +81,12 @@ spec:
         - name: rootfs
           hostPath:
             path: /
+        {{- if .Values.nodeExporter.textfileDirectory }}
+        - name: textfile
+          hostPath:
+            path: {{ .Values.nodeExporter.textfileDirectory }}
+            # DirectoryOrCreate, not Directory: the collector that writes the
+            # *.prom files may be installed after the DaemonSet rolls out.
+            type: DirectoryOrCreate
+        {{- end }}
 {{- end }}

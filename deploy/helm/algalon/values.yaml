@@ -10,6 +10,12 @@ dcgmExporter:
     - key: nvidia.com/gpu
       operator: Exists
   runtimeClassName: ""
+  # Out-of-cluster dcgm-exporters scraped in addition to the DaemonSet pods —
+  # bare-metal GPU nodes that are not cluster members. Every entry carries the
+  # node label by hand (there is no kubernetes_sd to derive it from); it must
+  # match the node label of the same machine's node/slurm-job entries — that
+  # string is the join key across all per-node series.
+  staticTargets: []   # e.g. [{address: "gpu01.example.internal:9400", node: "gpu01"}]
   resources:
     requests: {cpu: 100m, memory: 256Mi}
 
@@ -19,6 +25,14 @@ nodeExporter:
   port: 9100
   tolerations:
     - operator: Exists
+  # Same contract as dcgmExporter.staticTargets, for out-of-cluster
+  # node-exporters (:9100).
+  staticTargets: []   # e.g. [{address: "gpu01.example.internal:9100", node: "gpu01"}]
+  # Host directory holding *.prom files written by textfile collectors
+  # (e.g. Slurm accounting scripts on a controller node). When set, the
+  # DaemonSet mounts it read-only at the same path and enables
+  # --collector.textfile.directory. Empty = collector off (default).
+  textfileDirectory: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}
 
