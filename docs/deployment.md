@@ -61,6 +61,13 @@ stack — VictoriaMetrics, vmagent, vmalert, Alertmanager, Grafana — runs
 as Deployments. vmagent discovers exporter pods through the Kubernetes
 API, so scrape targets never need manual maintenance.
 
+Machines that are not cluster members — bare-metal GPU nodes running
+their own exporters, a Slurm controller — are added statically via
+`dcgmExporter.staticTargets` / `nodeExporter.staticTargets` (and the
+`slurm.*Targets` values). Static entries carry the same `job` and `node`
+label contract as the DaemonSet pods; see the
+[chart README](../deploy/helm/algalon/README.md#scraping-and-labels).
+
 One thing to remember: `make helm-sync` must run before the first
 install. Helm cannot read files outside a chart, so the chart's `files/`
 directory is generated from `monitoring/` and is git-ignored.

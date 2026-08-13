@@ -39,6 +39,30 @@ data:
           # Every series is attributable to a node.
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
+      {{- if .Values.dcgmExporter.staticTargets }}
+      # Out-of-cluster dcgm-exporters (bare-metal GPU nodes that are not
+      # cluster members). The job_name doubles as the job label, so rules and
+      # dashboards see no difference from the DaemonSet pods; the node label
+      # comes from the entry — kubernetes_sd cannot derive it, and it must
+      # match the same machine's node/slurm-job entries (join key).
+      - job_name: dcgm
+        static_configs:
+        {{- range .Values.dcgmExporter.staticTargets }}
+          - targets: [{{ .address | quote }}]
+            labels:
+              node: {{ .node | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.nodeExporter.staticTargets }}
+      # Same contract for out-of-cluster node-exporters.
+      - job_name: node
+        static_configs:
+        {{- range .Values.nodeExporter.staticTargets }}
+          - targets: [{{ .address | quote }}]
+            labels:
+              node: {{ .node | quote }}
+        {{- end }}
+      {{- end }}
       {{- if .Values.slurm.enabled }}
       # Slurm exporters live outside the cluster, so kubernetes_sd cannot see
       # them — they are enumerated statically from values.yaml instead.

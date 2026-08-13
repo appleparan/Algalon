@@ -86,8 +86,11 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `dcgmExporter.nodeSelector` | `nvidia.com/gpu.present: "true"` | gpu-operator's node label |
 | `dcgmExporter.tolerations` | `nvidia.com/gpu` Exists | run on tainted GPU nodes |
 | `dcgmExporter.runtimeClassName` | `""` | set for `nvidia` RuntimeClass clusters |
+| `dcgmExporter.staticTargets` | `[]` | out-of-cluster dcgm-exporters, `{address, node}` entries |
 | `nodeExporter.enabled` | `true` | host metrics DaemonSet (hostNetwork/hostPID) |
 | `nodeExporter.port` | `9100` | host port, not just a container port |
+| `nodeExporter.staticTargets` | `[]` | out-of-cluster node-exporters, `{address, node}` entries |
+| `nodeExporter.textfileDirectory` | `""` | hostPath with `*.prom` files; enables `--collector.textfile.directory` |
 | `allSmi.enabled` | `false` | optional unified GPU exporter |
 | `allSmi.interval` | `5` | sampling interval, seconds |
 | `host.enabled` | `true` | set `false` for a worker-only install |
@@ -125,6 +128,16 @@ vmagent uses one `kubernetes_sd` pod job. It keeps pods labelled
 node name into `node` — the exact labels the alert rules filter and
 Alertmanager groups on. There is no prometheus-operator dependency: no
 ServiceMonitors, no PodMonitors, no CRDs.
+
+Machines that are not cluster members — bare-metal GPU nodes next to the
+cluster, a Slurm controller — are listed statically instead, in
+`dcgmExporter.staticTargets` / `nodeExporter.staticTargets` (and the
+`slurm.*Targets` values for the Slurm exporters). Static entries produce
+the same `job` labels as the DaemonSet pods, so rules and dashboards make
+no distinction; the `node` label comes from the entry and must be the
+exact same string across every job scraping that machine — it is the join
+key, and a mismatch shows up not as an error but as silently empty
+dashboard panels.
 
 ## Validate
 
