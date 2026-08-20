@@ -24,13 +24,21 @@ to keep its exporters listening.
 | VictoriaLogs *(optional)* | Job stdout, pushed at job end by the epilog |
 | vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
-| Grafana | Eight auto-provisioned dashboards |
+| Grafana | Ten auto-provisioned dashboards |
 
 VictoriaLogs is the one component nothing scrapes: it is written to, by
 `monitoring/slurm/epilog-logpush.sh` running as `EpilogSlurmctld` on the
 Slurm controller. It is off in both deployment paths until you ask for it
 (compose profile `logs`, or `victorialogs.enabled` in the chart) — see
 [Job logs](slurm.md#job-logs-optional).
+
+Three optional Slurm-side pieces hang off the controller and the compute
+nodes, each a separate opt-in and none of them deployed by Algalon: the
+two exporters (`prometheus-slurm-exporter`, `slurm-job-exporter`), the
+epilog log push above, and `monitoring/slurm/sacct-textfile.sh` — a cron
+or timer job that turns Slurm accounting into a node_exporter textfile
+for the Scheduler Analytics dashboard. See
+[Slurm integration](slurm.md).
 
 `monitoring/` is the single source of truth for the rules, dashboards,
 scrape config, Alertmanager policy and the DCGM counter set. Docker
@@ -138,7 +146,7 @@ notifier.
 
 ## Dashboards
 
-Eight Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+Ten Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
 into the **Algalon** folder:
 
 - **SLO Overview** — the symptom-first entry point: 30-day compliance
@@ -160,3 +168,110 @@ into the **Algalon** folder:
 - **Slurm Queue / Slurm Job Explorer** — queue state and per-job
   accounting views; populated only with
   [Slurm integration](slurm.md).
+- **Scheduler Analytics** — a 7-day policy view over Slurm accounting:
+  queue-wait and runtime quantiles per partition, walltime accuracy,
+  job outcomes and GPU-hours per account. Populated by the optional
+  [sacct textfile collector](slurm.md#scheduler-analytics-optional).
+  Nothing on it pages: there is deliberately no job success-ratio SLO,
+  because most job failures are user error and burn-rate alerting on
+  them would page operators for mistakes they cannot fix.
+- **GPU Utilization Quality** — is the fleet's GPU time doing any work?
+  See [GPU utilization quality](#gpu-utilization-quality) below.
+
+## GPU utilization quality
+
+`DCGM_FI_DEV_GPU_UTIL` is the number everyone reaches for and the
+weakest signal on this page. It reports only that *a kernel was resident
+on the device* during the sample. A job whose dataloader cannot keep up,
+or one blocked in an NCCL all-reduce, keeps a kernel resident and reads
+near 100% while computing nothing. Buying more GPUs on the strength of
+that number buys more GPUs to wait with.
+
+So Algalon treats utilization as four layers, each answering a narrower
+question than the one above it. The gap between any two adjacent layers
+is waste:
+
+<!-- markdownlint-disable MD013 -->
+| Layer | Question it answers | Metric(s) | Covered by |
+| --- | --- | --- | --- |
+| 1. Allocated | Is a job holding this GPU at all? | `slurm_job_utilization_gpu` (per-job cgroup) | `SlurmJobGpuIdle`; Slurm Job Explorer |
+| 2. Busy | Is a kernel resident on the device? | `DCGM_FI_DEV_GPU_UTIL` | GPU Fleet Overview — **weak on its own**: resident is not the same as running, and a starved or blocked kernel still scores 100% |
+| 3. Actually computing | Are warps executing? | `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY` | GPU Utilization Quality; `GpuBusyButHollow` |
+| 4. Computing efficiently | Is it using the units it was bought for? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality |
+<!-- markdownlint-enable MD013 -->
+
+Power against the enforced limit deserves its own mention: it is a layer-4
+signal that needs no profiling fields at all, because both metrics are in
+the base counter set. Real training work sits around 0.7–1.0 of TDP; a
+GPU held at idle clocks inside an allocation sits at 0.1–0.3. On a fleet
+that cannot enable DCP, that ratio is the whole quality story.
+
+### The four waste patterns
+
+Each one is a *pair* of layers disagreeing, which is why no single metric
+finds them:
+
+- **Allocated-idle** — a job holds the GPU and no kernel is resident.
+  Layers 1 high, 2 low. Surfaced by `SlurmJobGpuIdle`, the alert the
+  per-node job exporter exists for.
+- **Busy-but-hollow** — a kernel is resident but almost no warps
+  execute. Layers 2 high, 3 low. The signature of an input pipeline,
+  CPU-bound preprocessing or a collective wait. Surfaced by
+  `GpuBusyButHollow` and by the claimed-vs-actual panel on GPU
+  Utilization Quality.
+- **Memory-holding** — the framebuffer is occupied while neither the SMs
+  nor the memory interface are doing anything. `DCGM_FI_DEV_FB_USED`
+  high with layers 3 and 4 near zero. Visible on the DRAM-active versus
+  SM-active panel.
+- **Throttled** — warps want to run and the hardware will not let them.
+  `DCGM_FI_DEV_CLOCKS_EVENT_REASONS >= 8`, showing up as a tensor and SM
+  activity dip with no code change behind it. Surfaced by
+  `GpuClocksThrottled`; check it before blaming a model.
+
+### Reading your own job
+
+These are not operator-only numbers. A researcher opens **Slurm Job
+Explorer**, picks their `job_id`, and reads the same layers for their own
+run: per-GPU utilization from the cgroup, then *SM active on your job's
+nodes* and *Power / TDP on your job's nodes* directly beneath it. High
+utilization over low SM activity means the input pipeline, not the GPU,
+is the bottleneck — and no amount of extra hardware will fix that.
+
+Operators see the same truth fleet-wide on **GPU Utilization Quality**.
+One vocabulary, two audiences: when an operator says a job is running
+hollow and the owner opens their own dashboard, both are looking at layer
+3 disagreeing with layer 2.
+
+### Enabling the profiling fields
+
+Layers 3 and 4 come from DCGM's DCP fields, added to
+`monitoring/exporters/dcgm-counters.csv`. Three caveats:
+
+- **Volta or newer.** Older parts do not expose them; the series are
+  simply absent, and every rule and panel that reads them stays empty
+  rather than wrong.
+- **They conflict with a concurrent profiler.** An Nsight or `nvprof`
+  session on the same GPU takes exclusive ownership of the profiling
+  hardware, so DCP sampling stops for its duration.
+- **A small sampling overhead**, which is the price of the only honest
+  answer to "is this GPU working".
+
+The counter set already carried `DCGM_FI_PROF_NVLINK_*`, so the
+exporter's DCP path is proven on any fleet running this CSV — these are
+new fields, not a new mechanism.
+
+### Why this lives in the scheduler-analytics phase
+
+Utilization quality is the **outcome measure** of QoS policy. Scheduler
+Analytics says what the policy handed out — GPU-hours per account, waits
+per partition, walltime accuracy. This says how much of it turned into
+computation. A policy review that looks only at the first half optimises
+for handing out hours; looking at both asks whether the hours did
+anything. That is why the *Effective fleet utilization (7d)* tile sits on
+Scheduler Analytics next to GPU-hours by account.
+
+Per-account effective hours are deliberately **not** computed. That would
+need per-job GPU attribution, which is only trustworthy on exclusive
+nodes (see [the `on(node)` join
+limits](slurm.md#the-onnode-join-contract)). Algalon does not publish a
+number it cannot stand behind.

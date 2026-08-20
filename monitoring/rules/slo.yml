@@ -15,9 +15,28 @@
 #   * long windows — 30-day compliance is `avg_over_time(<sli>[30d])` at
 #     query time. Recording a windowed average here would bake the window
 #     in and force a rule change to look at 7d or 90d.
-#   * alerts — burn-rate paging needs the exact job success ratio from the
-#     sacct textfile collector (Phase 3). Alerting on an approximation
-#     would train operators to ignore the page.
+#   * alerts. Burn-rate paging was reconsidered in Phase 3 and rejected
+#     on purpose, not deferred again. The candidate was a job success
+#     ratio, and on a shared research cluster most FAILED jobs are user
+#     error: a typo in a batch script, an OOM from a batch size the user
+#     chose, a bad module load. An operator paged for that cannot fix it,
+#     and an operator who cannot act on a page learns to ignore every
+#     page from the same source. Queue wait is therefore tracked as an
+#     SLI — it *is* something partition and QOS limits control — but it
+#     drives dashboards and policy reviews, never a notification.
+#
+#     The refinement worth stating precisely, because it is easy to read
+#     the paragraph above as "job failures are never actionable": what
+#     is not pageable is the failure *total*. The failure *distribution*
+#     is, because user error has a shape and infrastructure failure has
+#     a different one. Mistakes land on whichever node the scheduler
+#     picked and stay inside one account; a node hoarding failures, or
+#     failures appearing across several accounts at once, is something
+#     no single user can arrange. Those two shapes page as warnings from
+#     slurm.yml (SlurmNodeFailJobs, SlurmNodeFailureConcentration,
+#     SlurmFailureSpreadAcrossAccounts), all of them reading the sacct
+#     collector's counters and all silent without it. Counts measure
+#     users; distribution measures the cluster.
 #
 # Slurm-derived SLIs (node availability, job failures) intentionally
 # produce *no series* when the optional Slurm exporters are not deployed:
@@ -105,8 +124,47 @@ groups:
       # deliberately not one of the four ratio SLIs above.
       #
       # `clamp_min(..., 0)` absorbs the drops (slurmctld restart, purge)
-      # that would otherwise show as negative failures. The exact success
-      # ratio arrives with the sacct textfile collector in Phase 3, which
-      # is also what unlocks burn-rate alerting.
+      # that would otherwise show as negative failures.
+      #
+      # This rule stays even where the optional sacct textfile collector
+      # is installed, because it needs only the queue exporter and so
+      # works on clusters that have not opted in. Where the collector
+      # *is* running, `slurm_jobs_completed_total{state="failed"}` is the
+      # exact per-job counter and
+      # `sum(increase(slurm_jobs_completed_total{state="failed"}[1h]))`
+      # is its precise equivalent — but see the header: the resulting
+      # success ratio is charted, not paged on.
       - record: algalon:sli:job_failures_1h
         expr: clamp_min(delta(slurm_job_count_per_state{state="failed"}[1h]), 0)
+
+      # Queue wait, the one scheduler outcome operators actually control.
+      # The share of jobs that started within 30 minutes of submission —
+      # 1800s is the wait budget, and it is the `le` boundary the sacct
+      # collector's histogram is built around, so the two must stay in
+      # step if either changes.
+      #
+      # An event ratio, not a time average: the numerator counts jobs
+      # inside the budget and the denominator counts jobs that started at
+      # all. Aggregating with `sum()` before dividing is what makes it a
+      # fleet-wide ratio rather than an average of per-partition ratios,
+      # which would let a partition that started three jobs outvote one
+      # that started three hundred.
+      #
+      # `> 0` on the denominator is the same absent-not-lying doctrine the
+      # rest of this file follows: an hour in which nothing started has no
+      # queue-wait outcome to report, so the rule yields no sample instead
+      # of a 0/0 NaN or a defaulted 1.
+      #
+      # Only the 1h window is recorded. 30-day compliance is computed at
+      # query time in `scheduler-analytics.json` and `slo-overview.json`
+      # straight from the raw histogram, because an event ratio has to be
+      # re-summed over the long window — averaging 720 hourly ratios would
+      # weight a quiet night the same as a busy afternoon.
+      #
+      # Requires the opt-in sacct textfile collector
+      # (`monitoring/slurm/sacct-textfile.sh`); without it, absent.
+      - record: algalon:sli:job_wait_ok_1h
+        expr: >-
+          sum(increase(slurm_job_wait_seconds_bucket{le="1800"}[1h]))
+            /
+          (sum(increase(slurm_job_wait_seconds_count[1h])) > 0)

@@ -153,3 +153,48 @@ tests:
         exp_samples:
           - labels: 'algalon:sli:job_failures_1h{instance="slurmctld.example:9092", state="failed"}'
             value: 0
+
+  # --- algalon:sli:job_wait_ok_1h ---------------------------------------
+  # Two partitions from the sacct collector's histogram, both starting
+  # jobs at the same steady rate but with very different waits:
+  #   gpu  1 of every 4 started inside the 30-minute budget
+  #   cpu  3 of every 4
+  # Summing the counters before dividing makes that 4 fast starts out of
+  # 8, i.e. 0.5 — the whole point of aggregating first, since averaging
+  # the two partition ratios would also give 0.5 only because the two
+  # partitions happen to be equally busy here.
+  #
+  # Numerator and denominator are increases of the same shape over the
+  # same window, so whatever extrapolation `increase()` applies cancels
+  # in the division and the ratio is exact.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_wait_seconds_bucket{le="1800", partition="gpu", instance="slurmctld.example:9100"}'
+        values: '0+1x300'
+      - series: 'slurm_job_wait_seconds_count{partition="gpu", instance="slurmctld.example:9100"}'
+        values: '0+4x300'
+      - series: 'slurm_job_wait_seconds_bucket{le="1800", partition="cpu", instance="slurmctld.example:9100"}'
+        values: '0+3x300'
+      - series: 'slurm_job_wait_seconds_count{partition="cpu", instance="slurmctld.example:9100"}'
+        values: '0+4x300'
+    metricsql_expr_test:
+      - expr: algalon:sli:job_wait_ok_1h
+        eval_time: 2h
+        exp_samples:
+          - labels: 'algalon:sli:job_wait_ok_1h'
+            value: 0.5
+
+  # A quiet hour: the counters exist (the collector is installed and
+  # writing) but nothing started, so the denominator's `> 0` filter drops
+  # the only sample and the SLI is absent. "No jobs started" is not "every
+  # job waited too long", and it is not a perfect hour either.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_wait_seconds_bucket{le="1800", partition="gpu", instance="slurmctld.example:9100"}'
+        values: '40x300'
+      - series: 'slurm_job_wait_seconds_count{partition="gpu", instance="slurmctld.example:9100"}'
+        values: '50x300'
+    metricsql_expr_test:
+      - expr: algalon:sli:job_wait_ok_1h
+        eval_time: 2h
+        exp_samples: []

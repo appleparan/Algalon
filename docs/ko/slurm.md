@@ -7,7 +7,7 @@ Algalon은 하드웨어 관점의 지표와 함께 Slurm 스케줄러가 보는 
 포기했는지, 그리고 잡 단위로 누가 그 잡의 주인이며 잡이 붙잡고 있는 GPU가
 실제로 일을 하고 있는지까지요. 이 연동은 완전히 opt-in입니다. scrape 잡
 두 개가 추가될 뿐이고, 타깃을 등록하지 않으면 시계열도, 알림도 생기지
-않으며 대시보드 두 개가 비어 있을 뿐입니다.
+않으며 대시보드 세 개가 비어 있을 뿐입니다.
 
 여기 나오는 것 중 Algalon이 배포해 주는 것은 선택 사항인 클러스터 내부
 [jobExporter DaemonSet](#클러스터-내부-jobexporter-daemonset) 하나뿐입니다.
@@ -247,7 +247,7 @@ critical은 의도적으로 아무것도 억제하지 않습니다.
 
 ### 대시보드
 
-다른 대시보드와 마찬가지로 **Algalon** 폴더에 자동 프로비저닝되는 두 개가
+다른 대시보드와 마찬가지로 **Algalon** 폴더에 자동 프로비저닝되는 세 개가
 추가됩니다.
 
 - **Algalon / Slurm Queue** (`algalon-slurm-queue`) — 스케줄러 관점.
@@ -257,6 +257,15 @@ critical은 의도적으로 아무것도 억제하지 않습니다.
   변수로 한 번에 한 잡씩. 소유자와 account, cgroup 메모리, 프로세스 수,
   GPU 수, GPU별 사용률·메모리·전력, 그리고 아래에서 설명하는 노드 조인
   패널들.
+- **Algalon / Scheduler Analytics** (`algalon-scheduler`) — 운영용이 아니라
+  정책용인 7일 관점. [스케줄러 분석](#스케줄러-분석-선택)에서 설명하는 선택적
+  accounting collector가 데이터를 채웁니다. collector 없이 동작하는 패널은
+  pending 대 idle 패널 하나뿐입니다.
+
+Job Explorer에는 스케줄러가 답할 수 없는 질문 — *이 잡이 붙잡은 GPU가 실제로
+계산을 하고 있는가* — 에 답하는 패널 두 개도 있습니다. 운영자가 아니라 잡
+소유자를 향해 쓰였습니다. 이 패널들이 속한 4계층 체계는
+[GPU 활용도 품질](architecture.md#gpu-활용도-품질)을 보세요.
 
 ### 메트릭과 레이블
 
@@ -422,6 +431,287 @@ CURL_TIMEOUT=10
 다음 세 가지 평범한 상황에서 패널은 고장 난 것이 아니라 비어 있습니다. 잡이
 아직 실행 중일 때(출력은 실시간이 아니라 종료 시점에 전송됩니다), 훅을 설치하기
 전에 끝난 잡일 때, 그리고 저장소가 꺼져 있을 때입니다.
+
+## 스케줄러 분석 (선택)
+
+위의 두 exporter는 *스케줄러가 지금 무엇을 하고 있는가*에 답합니다. 하지만
+파티션 구성이 적절한지는 둘 다 알려 주지 못합니다. 둘 다 게이지를 내보내기
+때문입니다. 한 시간만 지나면 여섯 시간을 큐에서 기다린 잡과 바로 시작한 잡을
+구분할 수 없습니다. 정책 검토에서 실제로 던지는 질문 — 이 파티션의 시간 제한을
+올려야 하나, 지나치게 오래 기다리는 사람이 있나, 어느 account가 클러스터를
+소모하고 있나 — 은 모두 잡 단위 이력을 필요로 하고, 그 이력은 Slurm 자신의
+accounting 데이터베이스에 있습니다.
+
+`monitoring/slurm/sacct-textfile.sh`가 그것을 읽습니다. 이 스크립트는
+컨트롤러에서 cron이나 systemd 타이머로 실행되어, 종료된 잡의 윈도우를 누적
+카운터에 접어 넣고 node_exporter가 노출할 위치에 씁니다. epilog 훅과
+마찬가지로 Algalon은 스크립트와 그것을 읽는 rule·대시보드를 제공할 뿐,
+배포하거나 스케줄링하지는 않습니다.
+
+이것은 세 번째의, 별개인 opt-in입니다. 위의 두 exporter 중 어느 것도 필요하지
+않지만, 큐 exporter가 함께 돌고 있으면 Scheduler Analytics 대시보드가 더
+쓸모 있습니다.
+
+### 왜 exporter가 아니라 textfile collector인가
+
+`sacct`는 값싼 읽기가 아니라 데이터베이스 질의입니다. exporter로 만들면 30초
+scrape마다 slurmdbd 왕복이 동기적으로 끼어들고, accounting 데이터베이스가
+느려지는 순간 그것이 exporter 장애로 보이게 됩니다. `.prom` 파일을 쓰는 cron
+잡은 둘을 분리합니다. node_exporter는 마지막으로 성공한 스냅샷을 메모리
+속도로 서빙하고, 멈춘 `sacct`는 scrape를 깨는 대신 데이터를 늦출 뿐입니다.
+
+그 대신 collector가 자기 상태를 직접 들고 있어야 합니다. `.prom` 파일은
+스크립트가 소유한 상태 파일을 그대로 렌더링한 결과이며, 카운터가 실행 간에도
+재부팅 후에도 단조 증가하는 이유가 바로 이것입니다
+([상태, 리셋, 재시작](#상태-리셋-재시작) 참고).
+
+### 무엇을 내보내고, 각 메트릭이 무엇을 결정하나
+
+<!-- markdownlint-disable MD013 -->
+| 메트릭 | 타입 | 레이블 | 이것으로 내리는 결정 |
+| --- | --- | --- | --- |
+| `slurm_jobs_completed_total` | counter | `state`, `partition`, `account` | 결과가 어디에 몰리는가. `timeout` 비중이 계속 오른다면 walltime 제한이 실제 작업량보다 낮게 잡힌 것입니다. `account` 분해는 [실패의 확산](#실패-횟수와-실패-분포)을 보이게 하는 축입니다 |
+| `slurm_job_node_failures_total` | counter | `node` | **어느 노드가 아픈가.** FAILED와 NODE_FAIL 잡을 그 잡이 점유한 모든 노드에 한 번씩 계상합니다. Slurm의 압축 노드리스트는 펼쳐서 씁니다. 평평한 것이 정상이고, 실패를 쌓아 두는 노드는 drain 후보입니다 |
+| `slurm_job_wait_seconds` | histogram | `partition` | **파티션과 QOS 제한.** p50은 보통 사용자가 겪는 것을, p90은 누가 굶고 있는지를 알려 줍니다. p50이 평평한데 p90이 올라간다면 제약은 용량이 아니라 제한값입니다 |
+| `slurm_job_runtime_seconds` | histogram | `partition` | **파티션 구성.** p90 실행 시간이 몇 분인 파티션에 며칠짜리 최대 시간은 필요 없고, p50이 이미 제한값 근처인 파티션은 계속 timeout을 만들어 냅니다 |
+| `slurm_job_timelimit_used_ratio` | histogram | `partition` | **백필 효율.** `Elapsed / Timelimit`입니다. 낮은 쪽에 몰린 분포는 부풀린 walltime이고, 스케줄러는 너무 짧다고 판단한 틈에 잡을 백필하지 못하므로 과다 요청은 꽉 찬 큐 앞에서 노드를 놀립니다. 1.0을 넘는 분포는 제한이 죽인 잡들입니다 |
+| `slurm_job_gpu_seconds_total` | counter | `partition`, `account` | **Fairshare.** account별 할당 GPU 초. 의도한 몫보다 훨씬 위에 있는 account는 하드웨어를 더 사자는 근거가 아니라 fairshare나 QOS를 바꾸자는 근거입니다 |
+| `slurm_sacct_collector_last_run_timestamp_seconds` | gauge | — | 타이머가 아직 돌고 있는지. 값이 오래되었다면 클러스터가 조용한 것이 아니라 cron 잡이 죽은 것입니다 |
+| `slurm_sacct_collector_errors_total` | counter | — | 파서가 읽지 못한 행. 값이 오르면 `sacct` 출력이 스크립트의 기대와 어긋난 것입니다 — [여전히 놀랄 수 있는 것들](#여전히-놀랄-수-있는-것들)을 보세요 |
+<!-- markdownlint-enable MD013 -->
+
+`slurm_job_gpu_seconds_total`은 **사용된** GPU 초가 아니라 **할당된** GPU
+초를 셉니다. 놀고 있는 GPU를 붙잡은 잡도 전부 계산됩니다. 그 옆에
+`SlurmJobGpuIdle`이 존재하는 이유가 정확히 이것입니다. 한쪽은 무엇이
+나갔는지를, 다른 한쪽은 그것이 일을 했는지를 말합니다.
+
+wait 히스토그램은 recording rule 하나로도 이어집니다.
+[`monitoring/rules/slo.yml`](../../monitoring/rules/slo.yml)의
+`algalon:sli:job_wait_ok_1h`로, 제출 후 30분 안에 시작한 잡의 비율입니다.
+이 비율의 30일 버전은 **SLO Overview**의 stat 타일이며, 시간당 rule을
+평균 내지 않고 원본 히스토그램에서 다시 계산합니다. 그래야 바쁜 오후가
+한산한 밤보다 더 무겁게 반영됩니다. 알림은 없습니다 —
+[실패 횟수와 실패 분포](#실패-횟수와-실패-분포)를 보세요.
+
+### 컨트롤러에 설치하기
+
+컨트롤러가 실행할 수 있는 위치에 스크립트를 두고 상태 디렉터리를 만듭니다.
+
+```bash
+install -m 0755 monitoring/slurm/sacct-textfile.sh \
+  /usr/local/bin/algalon-sacct-textfile
+install -d -m 0755 /var/lib/algalon-sacct
+install -d -m 0755 /var/lib/node_exporter/textfile
+```
+
+선택적인 환경 변수 세 개를 읽습니다.
+
+```bash
+SACCT_STATE_DIR=/var/lib/algalon-sacct
+TEXTFILE_DIR=/var/lib/node_exporter/textfile
+ALGALON_SACCT_LOOKBACK_S=3600   # 최초 실행에만 사용, 이후에는 이어서 실행
+```
+
+`ALGALON_SACCT_LOOKBACK_S`는 상태가 아직 없을 때 **한 번만** 쓰입니다. 이후
+실행은 직전 윈도우의 끝에서 이어지므로 아래의 주기와 이 값은 서로 독립적입니다.
+cron 주기를 바꿔도 구멍이 생기거나 중복 집계되지 않습니다.
+
+`sacct`가 응답해 줄 사용자로 실행하세요. 스크립트는 `--allusers`를 넘기는데,
+이는 호출자가 Slurm operator나 admin이어야 한다는 뜻입니다. 그 권한이 없으면
+`sacct`는 호출자 자신의 잡만 조용히 보고하고, collector는 0에 가까운 카운터를
+아무렇지 않게 게시하게 됩니다.
+
+cron, 5분마다. 위의 두 경로는 스크립트의 기본값이므로, 위치를 옮기지 않았다면
+아무것도 넘길 필요가 없습니다.
+
+```cron
+*/5 * * * * root /usr/local/bin/algalon-sacct-textfile
+```
+
+또는 systemd 타이머. 문제가 생겼을 때 들여다보기가 더 쉽습니다.
+`/etc/systemd/system/algalon-sacct.service`:
+
+```ini
+[Unit]
+Description=Algalon sacct textfile collector
+After=slurmdbd.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=SACCT_STATE_DIR=/var/lib/algalon-sacct
+Environment=TEXTFILE_DIR=/var/lib/node_exporter/textfile
+ExecStart=/usr/local/bin/algalon-sacct-textfile
+```
+
+`/etc/systemd/system/algalon-sacct.timer`:
+
+```ini
+[Unit]
+Description=Run the Algalon sacct textfile collector every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable --now algalon-sacct.timer
+```
+
+epilog와 달리 이 스크립트는 **실패하면 0이 아닌 값으로 종료합니다.** 여기서는
+노드가 drain될 위험이 없고, 조용히 실패하는 cron 잡은 아무도 알아채지 못하는
+cron 잡이기 때문입니다. `systemctl status algalon-sacct.service`나 cron 메일이
+무엇이 잘못됐는지 보여 줍니다.
+
+### 파일을 노출하기
+
+`.prom` 파일은 같은 호스트의 node_exporter가 읽어야만 쓸모가 있습니다. 즉
+컨트롤러에도 다음 옵션으로 기동한 node_exporter가 필요합니다.
+
+```bash
+node_exporter --collector.textfile.directory=/var/lib/node_exporter/textfile
+```
+
+그리고 그것을 향한 scrape 타깃이 필요합니다. Compose 경로에서는 다른 머신과
+똑같이 컨트롤러를 `deploy/compose/host/targets/node-targets.yml`에 추가하면
+됩니다.
+
+컨트롤러가 클러스터 노드이고 Algalon의 node-exporter DaemonSet이 이미 돌고
+있는 Helm 경로에서는, exporter를 하나 더 띄우는 대신 차트의
+`nodeExporter.textfileDirectory`를 호스트 디렉터리로 설정하세요.
+
+```yaml
+nodeExporter:
+  textfileDirectory: /var/lib/node_exporter/textfile
+```
+
+그러면 DaemonSet이 해당 호스트 경로를 같은 위치에 읽기 전용으로 마운트하고
+textfile collector를 켭니다. 기본값이 비어 있고, 그래서 opt-in하지 않은
+사용자에게는 collector가 꺼진 채로 남습니다. 이 값은 DaemonSet이 덮는 *모든*
+노드에 적용된다는 점에 유의하세요. `.prom` 파일이 없는 노드는 아무것도
+기여하지 않을 뿐입니다.
+
+컨트롤러가 Kubernetes 노드가 아니라면 그 호스트에 node_exporter를 두고
+`nodeExporter.staticTargets`에 등록하세요.
+
+### 상태, 리셋, 재시작
+
+`$SACCT_STATE_DIR/state`에는 마지막으로 처리한 윈도우의 끝과 모든 누적
+카운터·버킷이 들어 있습니다. 알아 둘 만한 결과가 셋 있습니다.
+
+- **카운터는 재부팅을 견딥니다.** 시간 윈도우에서 다시 계산하는 값이 하나도
+  없으므로 컨트롤러를 재시작해도 카운터는 초기화되지 않습니다. 다음 실행이
+  직전 실행이 멈춘 지점에서 이어갈 뿐입니다.
+- **상태 디렉터리를 지우면 전부 0으로 리셋됩니다.** 그것은 평범한 카운터
+  리셋이고 `increase()`와 `rate()`가 알아서 처리합니다. 잃는 것은 이력이지
+  정확성이 아닙니다. rule과 대시보드의 모든 질의가 그 함수들로 쓰인 이유가
+  바로 이것입니다.
+- **실패한 실행은 잡을 잃지 않습니다.** 윈도우의 모든 잡을 접어 넣은 뒤에야
+  윈도우 끝이 전진하므로, 중단된 실행은 다음 실행이 같은 잡을 다시 조회하게
+  만듭니다. 겹치는 구간은 각 잡의 종료 시각으로 중복 제거되므로 다시
+  조회해도 두 번 세지 않습니다.
+
+`.prom` 파일은 임시 파일에 쓴 뒤 rename하므로 node_exporter가 절반만 쓰인
+exposition을 읽는 일은 없습니다. 이전 스냅샷이거나 새 스냅샷이거나 둘 중
+하나만 보입니다.
+
+### 카디널리티
+
+레이블은 `partition`(클러스터당 몇 개), `account`(수십 개), 그리고
+히스토그램 자신의 `le`뿐입니다. 많아야 수백 개의 시계열이고, 클러스터
+사용량에 따라 늘어나지 않습니다.
+
+`user`는 **의도적으로** 레이블이 아닙니다. 사용자 수는 상한 없이 늘어나고,
+사용자 한 명마다 히스토그램 세 개가 곱해집니다. 이 collector를 카디널리티
+문제로 만들 유일한 차원이 바로 이 collector가 거부하는 차원입니다. 사용자별
+귀속은 시계열이 아니라 `sacct` 질의의 일입니다. (잡 exporter는 `user`를
+달고 있지만, 그것은 지금 실행 중인 잡에만 해당하는 유계 집합입니다.)
+
+### 실패 횟수와 실패 분포
+
+`slurm_jobs_completed_total` 위에 얹고 싶어지는 가장 뻔한 것이 소진율
+알림이 달린 성공률이고, Algalon은 의도적으로 그것을 만들지 않았습니다.
+
+공용 연구 클러스터에서 `FAILED` 잡의 대부분은 사용자 실수입니다. 배치
+스크립트의 오타, 사용자가 고른 batch size로 인한 OOM, 잘못된 module load.
+간헐적인 실패 하나든, 한 사용자가 연달아 마흔 번 실패하든 마찬가지입니다.
+두 번째는 장애가 아니라 누군가 디버깅 중인 것입니다. 그 비율로 운영자를
+호출하는 것은 그가 고칠 수 없는 실수로 그를 호출하는 것이고, 대응할 수 없는
+호출을 받은 운영자는 같은 출처의 모든 호출을 무시하는 법을 배웁니다 — 노드에
+불이 났다는 호출까지 포함해서요. 비용은 낭비된 알림 하나가 아니라 거기에
+쓰인 신뢰입니다.
+
+이 논증은 빈틈이 없지만, **총량**에 대해서만 그렇습니다. 사용자 실수로
+설명되지 않는 것은 그 실패들의 *분포* 변화이고, 축은 둘입니다.
+
+**집중 — 한 노드가 실패를 불균형하게 끌어모으는 경우.** 노드를 고르는 것은
+사용자가 아니라 스케줄러이므로 실수는 클러스터 전체에 대체로 고르게
+떨어집니다. 어느 노드가 실패를 쌓기 시작했다면 그 노드에 유독 운 없는 사람이
+몰린 것이 아니라 노드가 고장 난 것입니다. 죽어 가는 GPU, 잘못된 드라이버,
+가득 찬 로컬 디스크, 부하에서 패킷을 흘리는 NIC. 이것은 drain 후보이고, 바로
+운영자가 손댈 수 있는 대상입니다. 그래서
+`slurm_job_node_failures_total{node}`과 `SlurmNodeFailureConcentration`이
+있습니다. 이 rule은 절대 하한과 과반 점유를 모두 요구하므로, 평범한 이탈이
+우연히 한 노드에 몰린 정도로는 울리지 않습니다.
+
+`node` 레이블은 Algalon의 다른 모든 `node` 레이블과 같은 값을 갖도록
+의도적으로 맞춰 두었습니다([`on(node)` 조인 계약](#onnode-조인-계약) 참고).
+두 가지가 따라옵니다. 의심스러운 노드를 Node Health와 DCGM에서 곧바로 찾아
+하드웨어 증거를 대조할 수 있고, Alertmanager의 억제 규칙 — 노드 범위의
+critical은 같은 노드의 warning을 억제합니다 — 이 `GpuXidFellOffBus` 같은
+critical이 이미 원인을 지목했을 때 이 집중 warning을 자동으로 잠재웁니다.
+그 실패들은 그 critical의 증상이지 두 번째 장애가 아닙니다.
+
+**확산 — 여러 account에서 동시에 실패가 나는 경우.** 한 사용자의 실수는
+구조적으로 그 사용자의 account 안에 갇힙니다. 서로 무관한 세 팀을 같은 30분
+안에 실패시킬 수는 없습니다. 공유 인프라는 할 수 있습니다. 사라진
+파일시스템, 아픈 slurmctld, 만료된 자격 증명, 잘못된 module 업데이트. 그래서
+`account` 레이블과 `SlurmFailureSpreadAcrossAccounts`가 있습니다. 이 rule은
+account 수와 실제 볼륨을 모두 요구합니다. 세 account가 각각 한 잡씩 실패한
+것은 한산한 오후일 뿐이기 때문입니다.
+
+추론이 아예 필요 없는 경우도 하나 있습니다. `SlurmNodeFailJobs`는 Slurm
+자신의 `NODE_FAIL` 판정에 반응합니다. 어떤 사용자도 잡을 그 상태로 만들 수
+없으므로, 정의상 사용자 실수일 수가 없습니다.
+
+네 신호 모두 `action: investigate`가 붙은 warning이고, 다른 스케줄러 알림
+옆의 `monitoring/rules/slurm.yml`에 함께 있으며, collector가 없는
+클러스터에서는 전부 침묵합니다.
+
+한 줄로 줄이면 이렇습니다. **실패 횟수는 사용자를 재고, 실패 분포는
+클러스터를 잽니다.**
+
+### 여전히 놀랄 수 있는 것들
+
+- **Accounting 지연.** 윈도우는 "지금"에서 끝나므로, 방금 끝났지만 아직
+  slurmdbd에 커밋되지 않은 잡은 이번 윈도우에도 다음 윈도우에도 들어오지
+  않습니다. 바쁜 클러스터에서 실행당 몇 개 수준입니다. 신경 쓰인다면 윈도우가
+  아니라 실행 주기를 넓히세요.
+- **타입이 붙은 GRES.** GPU 수는 `AllocTRES`의 타입 없는 `gres/gpu=N`
+  토큰에서 옵니다. Slurm은 타입이 붙은 항목(`gres/gpu:a100=2`)과 함께 이
+  토큰도 내보내므로 타입 요청도 한 번만 세어집니다. 다만 타입 없는 토큰을
+  없앤 사이트에서는 GPU 초가 0으로 보입니다.
+- **시작조차 하지 못한 잡.** pending 상태에서 `CANCELLED`된 잡에는 시작
+  시각이 없습니다. 이런 잡은 `slurm_jobs_completed_total`에는 세어지고 세
+  히스토그램 모두에서는 빠집니다. 실행된 적 없는 잡의 대기 시간을 0으로
+  치면 모든 분위수가 바닥으로 끌려가기 때문입니다.
+- **`UNLIMITED`과 `Partition_Limit` walltime**에는 사용 비율이 없으므로
+  `slurm_job_timelimit_used_ratio`에서 아예 빠집니다.
+- **노드 이름이 `node` 레이블과 일치해야 합니다.**
+  `slurm_job_node_failures_total`의 노드 이름은 Slurm 자신의 노드리스트에서
+  옵니다. scrape 타깃이 같은 머신에 다른 이름을 붙이고 있다면 이 실패
+  카운터는 DCGM이나 node-exporter와 맞물리지 않습니다.
+  slurm-job-exporter 타깃에 적용되는 것과 같은 주의사항이고, 해결책도
+  같습니다. 레이블 값이 완전히 같은 문자열이어야 합니다.
+- **배열 잡과 이종(heterogeneous) 잡**은 할당 단위(`--allocations`)로
+  세어집니다. 태스크 1000개짜리 배열 잡은 태스크마다 한 행씩 1000행이 되고,
+  배열 전체를 나타내는 행은 따로 없습니다.
 
 ## 함께 보기
 

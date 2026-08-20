@@ -24,13 +24,20 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | VictoriaLogs *(선택)* | 잡 stdout. epilog가 잡 종료 시 한 번 push |
 | vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
-| Grafana | 자동 프로비저닝되는 여덟 개 대시보드 |
+| Grafana | 자동 프로비저닝되는 열 개 대시보드 |
 
 VictoriaLogs는 아무도 scrape하지 않는 유일한 구성 요소입니다. Slurm
 컨트롤러에서 `EpilogSlurmctld`로 도는 `monitoring/slurm/epilog-logpush.sh`가
 이 저장소에 씁니다. 두 배포 경로 모두에서 명시적으로 켜기 전까지는 꺼져
 있습니다(compose `logs` 프로파일, 또는 차트의 `victorialogs.enabled`).
 [잡 로그](slurm.md#잡-로그-선택)를 보세요.
+
+컨트롤러와 계산 노드 쪽에는 선택적인 Slurm 관련 구성 요소 세 가지가 붙습니다.
+각각이 별개의 opt-in이고 어느 것도 Algalon이 배포하지 않습니다. exporter 두
+개(`prometheus-slurm-exporter`, `slurm-job-exporter`), 위의 epilog 로그
+push, 그리고 `monitoring/slurm/sacct-textfile.sh` — Slurm accounting을
+node_exporter textfile로 바꿔 Scheduler Analytics 대시보드에 공급하는 cron
+또는 타이머 잡입니다. [Slurm 통합](slurm.md)을 보세요.
 
 rule, 대시보드, scrape 설정, Alertmanager 정책, DCGM 카운터 세트의 단일
 진실 공급원은 `monitoring/` 디렉터리입니다. Docker Compose는 이 디렉터리를
@@ -134,7 +141,7 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
 
 ## 대시보드
 
-`monitoring/dashboards/`의 Grafana 대시보드 여덟 개가 **Algalon** 폴더로
+`monitoring/dashboards/`의 Grafana 대시보드 열 개가 **Algalon** 폴더로
 자동 프로비저닝됩니다.
 
 - **SLO Overview** — 증상부터 보는 진입점. 각 SLI의 30일 준수율을 SLO
@@ -154,3 +161,102 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
   켰을 때만 데이터가 채워집니다.
 - **Slurm Queue / Slurm Job Explorer** — 큐 상태와 잡별 accounting 뷰.
   [Slurm 통합](slurm.md)을 구성했을 때만 데이터가 채워집니다.
+- **Scheduler Analytics** — Slurm accounting 위에서 보는 7일짜리 정책 관점.
+  파티션별 큐 대기·실행 시간 분위수, walltime 정확도, 잡 결과, account별
+  GPU 시간을 보여줍니다. 선택적인
+  [sacct textfile collector](slurm.md#스케줄러-분석-선택)가 데이터를
+  채웁니다. 여기서 호출되는 알림은 하나도 없습니다. 잡 성공률 SLO는
+  의도적으로 만들지 않았습니다. 잡 실패의 대부분은 사용자 실수이고, 거기에
+  소진율 알림을 걸면 운영자가 고칠 수 없는 실수로 운영자를 호출하게 되기
+  때문입니다.
+- **GPU Utilization Quality** — 클러스터의 GPU 시간이 실제로 일을 하고
+  있는가? 아래 [GPU 활용도 품질](#gpu-활용도-품질)을 보세요.
+
+## GPU 활용도 품질
+
+`DCGM_FI_DEV_GPU_UTIL`은 누구나 먼저 집어 드는 숫자이면서 이 문서에서 가장
+약한 신호입니다. 이 값이 말하는 것은 샘플 시점에 *커널이 디바이스에 올라와
+있었다*는 사실뿐입니다. dataloader가 속도를 못 맞추는 잡이나 NCCL
+all-reduce에서 막혀 있는 잡도 커널은 올라가 있으므로 아무것도 계산하지 않으면서
+100%에 가깝게 나옵니다. 그 숫자를 근거로 GPU를 더 사면 함께 기다릴 GPU를 더
+사는 것입니다.
+
+그래서 Algalon은 활용도를 네 계층으로 다룹니다. 각 계층은 그 위 계층보다 좁은
+질문에 답하고, 인접한 두 계층 사이의 간격이 곧 낭비입니다.
+
+<!-- markdownlint-disable MD013 -->
+| 계층 | 답하는 질문 | 메트릭 | 어디서 보나 |
+| --- | --- | --- | --- |
+| 1. 할당됨 | 이 GPU를 붙잡고 있는 잡이 있는가? | `slurm_job_utilization_gpu` (잡별 cgroup) | `SlurmJobGpuIdle`, Slurm Job Explorer |
+| 2. 바쁨 | 커널이 디바이스에 올라와 있는가? | `DCGM_FI_DEV_GPU_UTIL` | GPU Fleet Overview — **단독으로는 약함**: 올라와 있는 것과 실행 중인 것은 다르고, 굶주렸거나 막힌 커널도 100%를 기록합니다 |
+| 3. 실제로 계산 중 | warp가 실행되고 있는가? | `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY` | GPU Utilization Quality, `GpuBusyButHollow` |
+| 4. 효율적으로 계산 중 | 사려던 연산 유닛을 쓰고 있는가? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality |
+<!-- markdownlint-enable MD013 -->
+
+전력 대 제한값은 따로 언급할 만합니다. 두 메트릭 모두 기본 카운터 세트에 있어서
+프로파일링 필드가 전혀 필요 없는 4계층 신호이기 때문입니다. 실제 학습 작업은
+TDP의 0.7–1.0 근처에, 할당만 붙잡은 채 idle 클럭에 머무는 GPU는 0.1–0.3에
+있습니다. DCP를 켤 수 없는 클러스터에서는 이 비율이 품질 이야기의 전부입니다.
+
+### 네 가지 낭비 패턴
+
+각각은 두 *계층이 어긋나는* 형태이고, 그래서 메트릭 하나로는 잡히지 않습니다.
+
+- **할당해 놓고 놀림(allocated-idle)** — 잡이 GPU를 붙잡고 있는데 커널이 없음.
+  1계층은 높고 2계층이 낮습니다. 노드별 잡 exporter가 존재하는 이유인
+  `SlurmJobGpuIdle`이 잡아냅니다.
+- **바쁜데 속 빈(busy-but-hollow)** — 커널은 올라와 있는데 warp가 거의 실행되지
+  않음. 2계층은 높고 3계층이 낮습니다. 입력 파이프라인, CPU 바운드 전처리,
+  collective 대기의 서명입니다. `GpuBusyButHollow`와 GPU Utilization Quality의
+  claimed-vs-actual 패널이 드러냅니다.
+- **메모리만 붙잡음(memory-holding)** — 프레임버퍼는 차 있는데 SM도 메모리
+  인터페이스도 아무것도 하지 않음. `DCGM_FI_DEV_FB_USED`는 높고 3·4계층은 0에
+  가깝습니다. DRAM active 대 SM active 패널에서 보입니다.
+- **스로틀링(throttled)** — warp는 돌고 싶은데 하드웨어가 막고 있음.
+  `DCGM_FI_DEV_CLOCKS_EVENT_REASONS >= 8`이고, 코드 변경 없이 tensor·SM 활동이
+  꺼지는 모양으로 나타납니다. `GpuClocksThrottled`가 잡아냅니다. 모델을 탓하기
+  전에 먼저 확인하세요.
+
+### 내 잡을 직접 읽기
+
+이 숫자들은 운영자 전용이 아닙니다. 연구자는 **Slurm Job Explorer**를 열어
+자신의 `job_id`를 고르고, 자기 실행에 대해 같은 계층을 읽습니다. cgroup에서
+나온 GPU별 활용도, 그리고 바로 그 아래의 *SM active on your job's nodes*와
+*Power / TDP on your job's nodes*입니다. 활용도는 높은데 SM active가 낮다면
+병목은 GPU가 아니라 입력 파이프라인이고, 하드웨어를 더 붙여도 해결되지
+않습니다.
+
+운영자는 **GPU Utilization Quality**에서 같은 사실을 클러스터 전체 관점으로
+봅니다. 어휘 하나에 청중 둘입니다. 운영자가 "이 잡이 속 빈 채로 돈다"고 말하고
+소유자가 자기 대시보드를 열면, 둘 다 3계층이 2계층과 어긋나는 지점을 보고 있는
+것입니다.
+
+### 프로파일링 필드 켜기
+
+3·4계층은 `monitoring/exporters/dcgm-counters.csv`에 추가한 DCGM DCP 필드에서
+옵니다. 주의사항이 셋 있습니다.
+
+- **Volta 이상.** 그 이전 하드웨어는 이 필드를 노출하지 않습니다. 시계열이 그냥
+  없을 뿐이고, 이를 읽는 모든 rule과 패널은 틀린 값을 보이는 대신 비어 있습니다.
+- **동시에 도는 프로파일러와 충돌합니다.** 같은 GPU에 붙은 Nsight나 `nvprof`
+  세션이 프로파일링 하드웨어를 독점하므로 그동안 DCP 샘플링이 멈춥니다.
+- **약간의 샘플링 오버헤드**가 있습니다. "이 GPU가 일을 하고 있는가"에 정직하게
+  답하는 유일한 방법의 값입니다.
+
+카운터 세트에는 이미 `DCGM_FI_PROF_NVLINK_*`가 있었으므로 이 CSV를 쓰는
+클러스터라면 exporter의 DCP 경로는 이미 검증된 셈입니다. 새 메커니즘이 아니라
+새 필드일 뿐입니다.
+
+### 왜 이것이 스케줄러 분석 단계에 있나
+
+활용도 품질은 QoS 정책의 **결과 지표**입니다. Scheduler Analytics는 정책이
+무엇을 나눠 줬는지 — account별 GPU 시간, 파티션별 대기, walltime 정확도 —
+말합니다. 이쪽은 그중 얼마가 계산으로 바뀌었는지를 말합니다. 앞의 절반만 보는
+정책 검토는 시간을 잘 나눠 주는 방향으로 최적화되고, 둘을 함께 보는 검토라야
+그 시간이 무언가를 했는지를 묻습니다. Scheduler Analytics의 *Effective fleet
+utilization (7d)* 타일이 account별 GPU 시간 옆에 있는 이유가 이것입니다.
+
+account별 유효 시간은 의도적으로 계산하지 **않습니다.** 그러려면 잡 단위 GPU
+귀속이 필요하고, 그것은 전용 노드에서만 신뢰할 수 있습니다
+([`on(node)` 조인의 한계](slurm.md#onnode-조인-계약) 참고). Algalon은 책임질 수
+없는 숫자를 게시하지 않습니다.

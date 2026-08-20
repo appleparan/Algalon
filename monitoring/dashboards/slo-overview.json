@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Symptom-first entry point (L0): is the cluster serving its users? Four 0-1 SLIs recorded as algalon:sli:*, their 30-day compliance against the SLO targets, and the error budget left to spend.",
+  "description": "Symptom-first entry point (L0): is the cluster serving its users? Four 0-1 SLIs recorded as algalon:sli:*, their 30-day compliance against the SLO targets, the error budget left to spend, and the queue-wait event ratio from the optional sacct collector.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -68,7 +68,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 0
       },
@@ -140,8 +140,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 5,
         "y": 0
       },
       "id": 2,
@@ -212,8 +212,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 0
       },
       "id": 3,
@@ -284,8 +284,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 5,
+        "x": 15,
         "y": 0
       },
       "id": 4,
@@ -322,6 +322,78 @@
         }
       ],
       "title": "NFS latency - 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Share of jobs that started within 30 minutes of submission, over 30 days - the queue-wait SLI, recomputed from the raw histogram so busy hours weigh more than quiet ones. It is deliberately absent from the error budget bar below: that bar averages time-based SLIs, and this is an event ratio over jobs.\n\nSLO target: 0.90. Break it down by partition, and see why the waits look the way they do, in Algalon / Scheduler Analytics.\n\nRequires the opt-in sacct textfile collector (monitoring/slurm/sacct-textfile.sh); empty without it - absent means unmeasured, not healthy.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.1.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(slurm_job_wait_seconds_bucket{le=\"1800\"}[30d])) / sum(increase(slurm_job_wait_seconds_count[30d]))",
+          "instant": true,
+          "legendFormat": "Jobs started <30min",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Jobs started <30min (30d)",
       "type": "stat"
     },
     {
@@ -594,7 +666,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Jobs that entered the failed state in the last 24 hours. A count, not a ratio: the queue exporter publishes gauges only, so the exact success ratio waits on the sacct collector.",
+      "description": "Jobs that entered the failed state in the last 24 hours. A count, not a ratio: the queue exporter publishes gauges only. The optional sacct collector does provide the exact counter (slurm_jobs_completed_total{state=\"failed\"}), but the resulting success ratio is deliberately not an SLO and nothing pages on it - most job failures are user error. See Algalon / Scheduler Analytics.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -914,7 +986,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "algalon:sli:job_failures_1h - newly failed jobs in the trailing hour, clamped at zero so an accounting rollover does not read as negative failures.",
+      "description": "algalon:sli:job_failures_1h - newly failed jobs in the trailing hour, clamped at zero so an accounting rollover does not read as negative failures. Charted, never paged on: on a shared cluster most failures are the user's, not the cluster's.",
       "fieldConfig": {
         "defaults": {
           "color": {
