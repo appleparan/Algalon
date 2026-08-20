@@ -78,6 +78,13 @@ slurm:
     image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
     port: 9798
     dcgmUpdateInterval: 10
+    # Per-job GPU attribution runs `nvidia-smi -L` inside each job cgroup,
+    # and nvidia-smi is injected by the nvidia container runtime rather than
+    # baked into the image. Set this to "nvidia" on clusters where that
+    # runtime is gated behind a RuntimeClass; leave empty only when the
+    # nvidia runtime is already the node default. Without it the pod still
+    # reports cgroup CPU/memory but no slurm_job_*_gpu series (cgroup v2).
+    runtimeClassName: ""
     nodeSelector: {}
     tolerations: []
     resources:

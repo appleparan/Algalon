@@ -10,6 +10,15 @@ DCGM autodetect only engages when it sees a running nv-hostengine
 process. hostNetwork lets it reach that engine at localhost:5555.
 SYS_PTRACE: the collector reads /proc/<pid>/environ of job processes to
 find their GPUs on cgroup v2.
+
+Per-job GPU attribution additionally needs nvidia-smi to run INSIDE the
+job's cgroup: upstream cgroup_gpus() shells out to get_gpus.sh, which
+runs `nvidia-smi -L`. nvidia-smi is deliberately not baked into the image
+— the nvidia container runtime injects it — which is why the pod declares
+NVIDIA_VISIBLE_DEVICES / NVIDIA_DRIVER_CAPABILITIES and, on clusters that
+gate the runtime behind a RuntimeClass, runtimeClassName. Without the
+nvidia runtime on the node, cgroup CPU/memory metrics still work but the
+slurm_job_*_gpu series are absent.
 */}}
 apiVersion: apps/v1
 kind: DaemonSet
@@ -31,6 +40,9 @@ spec:
       hostNetwork: true
       hostPID: true
       dnsPolicy: ClusterFirstWithHostNet
+      {{- with .Values.slurm.jobExporter.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
       {{- with .Values.slurm.jobExporter.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -41,22 +53,35 @@ spec:
       {{- end }}
       containers:
         - name: slurm-job-exporter
-          image: {{ .Values.slurm.jobExporter.image }}
+          image: {{ required "slurm.jobExporter.image is required when enabled" .Values.slurm.jobExporter.image }}
           args:
             - --port={{ .Values.slurm.jobExporter.port }}
             - --monitor=dcgm
             - --dcgm-update-interval={{ .Values.slurm.jobExporter.dcgmUpdateInterval }}
+          env:
+            # Make the nvidia container runtime inject nvidia-smi and the
+            # driver libs; get_gpus.sh needs `nvidia-smi -L` per cgroup.
+            # "utility" is enough — no compute/CUDA context is created here.
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: utility
           securityContext:
             capabilities:
               add: ["SYS_PTRACE"]
           ports:
             - name: metrics
               containerPort: {{ .Values.slurm.jobExporter.port }}
+              hostPort: {{ .Values.slurm.jobExporter.port }}
               protocol: TCP
           volumeMounts:
+            # NOT readOnly: on cgroup v2 the collector does
+            # os.mkdir(<job cgroup>/gpu_probe) to run its GPU probe inside
+            # the job's cgroup (only FileExistsError is caught). A read-only
+            # cgroupfs turns that into EROFS and every collect() with a
+            # running GPU job returns 500.
             - name: cgroup
               mountPath: /sys/fs/cgroup
-              readOnly: true
             # uid -> username for the metric's user label; local users only.
             - name: passwd
               mountPath: /etc/passwd

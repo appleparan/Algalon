@@ -15,11 +15,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y --no-install-recommends ${DCGM_PKG} \
     && rm -rf /var/lib/apt/lists/*
 
+# The whole point of installing ${DCGM_PKG} is the python bindings the
+# exporter adds to sys.path at runtime. NVIDIA has moved that directory
+# between DCGM majors, so fail the BUILD rather than ship an image whose
+# --monitor=dcgm silently degrades to no GPU metrics.
+RUN python3 -c "import glob; assert glob.glob('/usr/share/datacenter-gpu-manager-*/bindings/python3/'), 'DCGM python bindings missing'"
+
 RUN pip3 install --no-cache-dir --break-system-packages \
       prometheus_client psutil
 
 ADD https://raw.githubusercontent.com/guilbaults/slurm-job-exporter/${SJE_VERSION}/slurm-job-exporter.py \
     /opt/slurm-job-exporter/slurm-job-exporter.py
+
+# Per-job GPU attribution: cgroup_gpus() shells out to `get_gpus.sh` by bare
+# name, so it must be on PATH and executable. It binds itself into the job's
+# cgroup and runs `nvidia-smi -L`; nvidia-smi itself is NOT baked in — the
+# nvidia container runtime injects it (see the DaemonSet's NVIDIA_* env and
+# runtimeClassName). Same pinned tag as the exporter above.
+ADD https://raw.githubusercontent.com/guilbaults/slurm-job-exporter/${SJE_VERSION}/get_gpus.sh \
+    /usr/local/bin/get_gpus.sh
+# ADD does not set the exec bit, and `chmod +x` alone would leave the file
+# unreadable to non-root — a #! script must be READ by its interpreter, not
+# merely executed. 0755 keeps it runnable under a runAsUser override too.
+RUN chmod 0755 /usr/local/bin/get_gpus.sh
 
 ENTRYPOINT ["python3", "/opt/slurm-job-exporter/slurm-job-exporter.py"]
 CMD ["--monitor", "dcgm"]
