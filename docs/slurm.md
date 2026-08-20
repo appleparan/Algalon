@@ -9,9 +9,11 @@ are doing any work. The integration is entirely opt-in: it adds two
 scrape jobs, and with no targets registered it produces no series, no
 alerts and two empty dashboards.
 
-Nothing here is deployed by Algalon. Both exporters need Slurm CLI or
-cgroup access on the host, so they run as ordinary host services on your
-Slurm machines and Algalon only scrapes them.
+Nothing here is deployed by Algalon, except the optional in-cluster
+[jobExporter DaemonSet](#in-cluster-jobexporter-daemonset). Both exporters
+need Slurm CLI or cgroup access on the host, so by default they run as
+ordinary host services on your Slurm machines and Algalon only scrapes
+them.
 
 ## Two exporters, two jobs
 
@@ -95,9 +97,11 @@ for the full target-file reference.
 
 ### Helm and k3s
 
-The exporters live outside the cluster, so `kubernetes_sd` cannot find
-them; they are enumerated statically in values instead. Everything is
-gated on `slurm.enabled`, which defaults to `false`:
+When the exporters live outside the cluster, `kubernetes_sd` cannot find
+them; they are enumerated statically in values instead. (Compute nodes
+that *are* cluster members get the DaemonSet path in the
+[next section](#in-cluster-jobexporter-daemonset) — no static list.)
+Everything below is gated on `slurm.enabled`, which defaults to `false`:
 
 ```yaml
 slurm:
@@ -115,6 +119,101 @@ label from `__meta_kubernetes_pod_node_name`, so the value you write
 here must be the **Kubernetes node name**, not an arbitrary hostname —
 otherwise the join silently matches nothing. Chart reference:
 [`deploy/helm/algalon/`](../deploy/helm/algalon/README.md).
+
+### In-cluster jobExporter (DaemonSet)
+
+`jobTargets` above assumes the compute nodes live outside the cluster.
+When they are cluster members instead, run slurm-job-exporter as a
+DaemonSet with `slurm.jobExporter.enabled: true` rather than
+enumerating them statically. Enable either `jobTargets` or
+`jobExporter` for a given node set, not both — running both scrapes
+the same jobs twice.
+
+The DaemonSet still needs a DCGM engine to read per-GPU metrics, and it
+needs that engine on the host rather than embedded in its own pod: each
+node must already run a host-side `nv-hostengine` listening on `:5555`,
+with the exporter attaching to it as a remote client over
+`hostNetwork`. If the node's `dcgm-exporter` DaemonSet also runs there,
+point it at the same engine with `dcgmExporter.extraArgs: ["-r",
+"localhost:5555"]` and `dcgmExporter.hostNetwork: true` — two DCGM
+engines on one node cannot both watch the `DCGM_FI_PROF_*` fields, so
+`dcgm-exporter` and `slurm-job-exporter` must share the single
+host-side engine.
+
+#### Prerequisites on every selected node
+
+Beyond the host-side `nv-hostengine` above, the DaemonSet path has two
+prerequisites that the static host-service path does not:
+
+- **nvidia-container-toolkit, and the `nvidia` RuntimeClass if your
+  cluster gates the runtime behind one.** Per-job GPU attribution is not
+  something the exporter can do from DCGM alone: DCGM says *this GPU is
+  busy*, and the mapping from GPU to job comes from running
+  `nvidia-smi -L` inside the job's own cgroup. `nvidia-smi` is injected
+  into the container by the nvidia container runtime — it is deliberately
+  not baked into the image, because the binary must match the host driver.
+  So the pod declares `NVIDIA_VISIBLE_DEVICES=all` and
+  `NVIDIA_DRIVER_CAPABILITIES=utility`, and where the runtime is not the
+  node default you must also set
+  `slurm.jobExporter.runtimeClassName: nvidia`. Without the toolkit the
+  pod still starts and still reports cgroup CPU and memory, but every
+  `slurm_job_*_gpu` series is missing — and `SlurmJobGpuIdle`, the alert
+  this exporter exists for, never fires.
+- **Slurm users resolvable from `/etc/passwd`.** The exporter turns a uid
+  into the `user` label by shelling out to `id --name --user <uid>`, and
+  the pod gets only a read-only bind mount of the host's `/etc/passwd`. At
+  a site that resolves Slurm users through LDAP or SSSD rather than local
+  accounts, that lookup raises and the *whole* collection fails — not just
+  the `user` label, the entire scrape. Either make the users visible to
+  the container (e.g. additionally mount the host's `/var/lib/sss` so the
+  NSS path works inside the pod) or keep the exporter on the host as a
+  systemd service via `jobTargets`, where it uses the node's own NSS
+  stack. Algalon does not patch upstream to soften this.
+
+Cgroup v2 note: the collector creates a short-lived `gpu_probe` child
+cgroup under each job to run that probe, so the `/sys/fs/cgroup` mount is
+deliberately **writable**. Mounting it read-only makes every collection
+with a running GPU job fail.
+
+```yaml
+slurm:
+  jobExporter:
+    enabled: true
+    image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
+    port: 9798
+    dcgmUpdateInterval: 10
+    # "nvidia" where the runtime is behind a RuntimeClass; leave empty
+    # only if the nvidia runtime is already the node default.
+    runtimeClassName: nvidia
+    nodeSelector: {}
+    tolerations: []
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+```
+
+The port is a **host** port (`hostNetwork` plus an explicit `hostPort`),
+so anything else already bound to `:9798` on the node — most likely a
+leftover host-service copy of this same exporter — surfaces as a pod that
+will not schedule.
+
+`jobExporter` renders on `slurm.jobExporter.enabled: true` alone; it
+does not require `slurm.enabled: true`, which only gates the static
+`queueTargets`/`jobTargets` scrape jobs described above. The pods carry
+`algalon.io/scrape: "true"` and `algalon.io/job: slurm-job`, so the
+`algalon-pods` kubernetes_sd job picks them up the same way it picks up
+`dcgm-exporter` and `node-exporter` pods — no scrape-config change is
+needed. `job` comes from the `algalon.io/job` pod label and `node` from
+`__meta_kubernetes_pod_node_name`, exactly the relabelling `jobTargets`
+gets by hand for its static entries, so the resulting series carry the
+same `job="slurm-job"` and `node` labels either way.
+
+Labels being identical is what makes the rules and dashboards portable
+across the two paths, but it is a statement about *labels*, not about
+coverage: every rule, dashboard and join above applies unchanged **to the
+metrics the pod actually produces**. Meet the two prerequisites above and
+that is all of them; miss the nvidia runtime and the GPU-derived half —
+the Job Explorer's per-GPU panels and `SlurmJobGpuIdle` — stays empty
+while the CPU and memory half looks perfectly healthy.
 
 ## What you get
 

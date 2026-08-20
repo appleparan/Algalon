@@ -3,8 +3,13 @@
 Kubernetes counterpart of monitoring/scrape/prometheus.yml. Compose enumerates
 targets from static files; here a single kubernetes_sd job discovers every
 opted-in worker pod and relabelling reconstructs the same label contract:
-  job  == dcgm | node | all-smi   (alert rules filter on it)
+  job  == dcgm | node | all-smi | slurm-job   (alert rules filter on it)
   node == the node the pod runs on (Alertmanager groups on it)
+slurm-job reaches vmagent either way: as discovered pods when
+slurm.jobExporter is enabled (compute nodes that ARE cluster members), or
+as static_configs from slurm.jobTargets when they are not. Both paths end
+up on the same job/node label pair, so nothing downstream distinguishes
+them.
 */}}
 apiVersion: v1
 kind: ConfigMap

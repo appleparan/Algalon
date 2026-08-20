@@ -65,7 +65,8 @@ compose host) only need the exporters:
 `host.enabled=false` drops VictoriaMetrics, vmagent, vmalert, Alertmanager
 and Grafana — including the Slack Secret requirement. The exporters keep
 their contract-fixed ports: DCGM `9400`, node-exporter `9100`
-(hostNetwork), all-smi `9090`.
+(hostNetwork), all-smi `9090`, slurm-job-exporter `9798` (hostNetwork,
+opt-in).
 
 ## all-smi (optional)
 
@@ -78,6 +79,7 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 
 ## Values
 
+<!-- markdownlint-disable MD013 -->
 | Key | Default | What it does |
 |---|---|---|
 | `dcgmExporter.enabled` | `true` | GPU metrics DaemonSet |
@@ -86,6 +88,8 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `dcgmExporter.nodeSelector` | `nvidia.com/gpu.present: "true"` | gpu-operator's node label |
 | `dcgmExporter.tolerations` | `nvidia.com/gpu` Exists | run on tainted GPU nodes |
 | `dcgmExporter.runtimeClassName` | `""` | set for `nvidia` RuntimeClass clusters |
+| `dcgmExporter.extraArgs` | `[]` | extra CLI args; main use is `["-r", "localhost:5555"]` to attach to a host-side nv-hostengine |
+| `dcgmExporter.hostNetwork` | `false` | share the host netns so `extraArgs` can reach that engine on localhost |
 | `dcgmExporter.staticTargets` | `[]` | out-of-cluster dcgm-exporters, `{address, node}` entries |
 | `nodeExporter.enabled` | `true` | host metrics DaemonSet (hostNetwork/hostPID) |
 | `nodeExporter.port` | `9100` | host port, not just a container port |
@@ -93,6 +97,14 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `nodeExporter.textfileDirectory` | `""` | hostPath with `*.prom` files; enables `--collector.textfile.directory` |
 | `allSmi.enabled` | `false` | optional unified GPU exporter |
 | `allSmi.interval` | `5` | sampling interval, seconds |
+| `slurm.jobExporter.enabled` | `false` | in-cluster slurm-job-exporter DaemonSet; alternative to `slurm.jobTargets` |
+| `slurm.jobExporter.image` | `ghcr.io/appleparan/slurm-job-exporter:0.4.12` | required when enabled; built from `docker/slurm-job-exporter/` |
+| `slurm.jobExporter.port` | `9798` | container **and** host port (name `metrics`) |
+| `slurm.jobExporter.dcgmUpdateInterval` | `10` | DCGM sampling interval, seconds |
+| `slurm.jobExporter.runtimeClassName` | `""` | set to `nvidia` where the runtime is behind a RuntimeClass — required for per-job GPU metrics |
+| `slurm.jobExporter.nodeSelector` | `{}` | restrict to the Slurm compute nodes |
+| `slurm.jobExporter.tolerations` | `[]` | tolerate the compute nodes' taints |
+| `slurm.jobExporter.resources` | `cpu 100m / mem 128Mi` | requests only |
 | `host.enabled` | `true` | set `false` for a worker-only install |
 | `victoriametrics.retentionMonths` | `3` | `--retentionPeriod` (VM's unitless default is months) |
 | `victoriametrics.storage.size` | `50Gi` | PVC size (StatefulSet) |
@@ -104,6 +116,7 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `alertmanager.slack.warningUrl` | `""` | as above; both URLs required together |
 | `grafana.adminUser` | `admin` | `GF_SECURITY_ADMIN_USER` |
 | `grafana.adminPassword` | `admin` | `GF_SECURITY_ADMIN_PASSWORD` — change it |
+<!-- markdownlint-enable MD013 -->
 
 Every component also takes `image` and `resources`; see `values.yaml`.
 
@@ -131,13 +144,22 @@ ServiceMonitors, no PodMonitors, no CRDs.
 
 Machines that are not cluster members — bare-metal GPU nodes next to the
 cluster, a Slurm controller — are listed statically instead, in
-`dcgmExporter.staticTargets` / `nodeExporter.staticTargets` (and the
-`slurm.*Targets` values for the Slurm exporters). Static entries produce
+`dcgmExporter.staticTargets` / `nodeExporter.staticTargets` and the
+`slurm.queueTargets` / `slurm.jobTargets` values. Static entries produce
 the same `job` labels as the DaemonSet pods, so rules and dashboards make
 no distinction; the `node` label comes from the entry and must be the
 exact same string across every job scraping that machine — it is the join
 key, and a mismatch shows up not as an error but as silently empty
 dashboard panels.
+
+The Slurm *job* exporter is the one case with both paths. When the compute
+nodes are cluster members, `slurm.jobExporter.enabled` runs it as a
+DaemonSet and the `algalon-pods` job discovers it like any other pod, with
+`node` derived from `__meta_kubernetes_pod_node_name`; when they are not,
+`slurm.jobTargets` enumerates them statically. Pick one per node set —
+enabling both scrapes the same jobs twice. The queue exporter
+(`slurm.queueTargets`) is always static: it belongs on the slurmctld or a
+login node, which is not part of the cluster.
 
 ## Validate
 

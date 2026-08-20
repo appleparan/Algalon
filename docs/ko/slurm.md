@@ -9,9 +9,11 @@ Algalon은 하드웨어 관점의 지표와 함께 Slurm 스케줄러가 보는 
 두 개가 추가될 뿐이고, 타깃을 등록하지 않으면 시계열도, 알림도 생기지
 않으며 대시보드 두 개가 비어 있을 뿐입니다.
 
-여기 나오는 것 중 Algalon이 배포해 주는 것은 없습니다. 두 exporter 모두
-호스트에서 Slurm CLI나 cgroup에 접근해야 하므로, Slurm 머신 위에서 일반적인
-호스트 서비스로 실행하고 Algalon은 그것을 scrape하기만 합니다.
+여기 나오는 것 중 Algalon이 배포해 주는 것은 선택 사항인 클러스터 내부
+[jobExporter DaemonSet](#클러스터-내부-jobexporter-daemonset) 하나뿐입니다.
+두 exporter 모두 호스트에서 Slurm CLI나 cgroup에 접근해야 하므로, 기본적으로는
+Slurm 머신 위에서 일반적인 호스트 서비스로 실행하고 Algalon은 그것을
+scrape하기만 합니다.
 
 ## exporter 두 개, scrape 잡 두 개
 
@@ -94,8 +96,10 @@ Slurm을 쓰지 않는다면 두 파일을 빈 리스트(`[]`)로 두거나 아�
 
 ### Helm과 k3s
 
-exporter가 클러스터 바깥에 있으므로 `kubernetes_sd`로는 찾을 수 없습니다.
-대신 values에 정적으로 나열합니다. 모든 것은 기본값이 `false`인
+exporter가 클러스터 바깥에 있으면 `kubernetes_sd`로는 찾을 수 없으므로,
+대신 values에 정적으로 나열합니다. (계산 노드가 클러스터 *멤버*라면
+[다음 절](#클러스터-내부-jobexporter-daemonset)의 DaemonSet 경로를 쓰며
+정적 목록이 필요 없습니다.) 아래 내용은 모두 기본값이 `false`인
 `slurm.enabled`로 게이팅됩니다.
 
 ```yaml
@@ -114,6 +118,99 @@ slurm:
 호스트명이 아니라 **쿠버네티스 노드 이름**이어야 합니다. 그렇지 않으면
 조인이 조용히 아무것도 매칭하지 못합니다. 차트 문서는
 [`deploy/helm/algalon/`](../../deploy/helm/algalon/README.md)에 있습니다.
+
+### 클러스터 내부 jobExporter (DaemonSet)
+
+위의 `jobTargets`는 계산 노드가 클러스터 바깥에 있다고 가정합니다. 계산
+노드가 클러스터 멤버라면, 정적으로 나열하는 대신
+`slurm.jobExporter.enabled: true`로 slurm-job-exporter를 DaemonSet으로
+실행하세요. 같은 노드 집합에 대해서는 `jobTargets`와 `jobExporter` 중
+하나만 켭니다 — 둘 다 켜면 같은 잡을 이중으로 scrape하게 됩니다.
+
+DaemonSet도 GPU별 메트릭을 읽으려면 DCGM 엔진이 필요하지만, 이번에는
+자기 파드에 내장된 엔진이 아니라 호스트 쪽 엔진을 씁니다. 각 노드에는
+이미 `:5555`에서 대기하는 호스트 쪽 `nv-hostengine`이 떠 있어야 하고,
+exporter는 `hostNetwork`를 통해 그 엔진에 remote client로 붙습니다. 같은
+노드에서 `dcgm-exporter` DaemonSet도 돌고 있다면, `dcgmExporter.extraArgs:
+["-r", "localhost:5555"]`와 `dcgmExporter.hostNetwork: true`로 동일한
+엔진을 가리키게 하세요 — 한 노드에서 두 개의 DCGM 엔진이 동시에
+`DCGM_FI_PROF_*` 필드를 볼 수는 없으므로, `dcgm-exporter`와
+slurm-job-exporter는 호스트 쪽 엔진 하나를 공유해야 합니다.
+
+#### 대상 노드마다 필요한 선행 조건
+
+위의 호스트 쪽 `nv-hostengine` 외에, DaemonSet 경로에는 정적 호스트 서비스
+경로에는 없는 선행 조건이 두 가지 더 있습니다.
+
+- **nvidia-container-toolkit, 그리고 클러스터가 런타임을 RuntimeClass로
+  게이팅한다면 `nvidia` RuntimeClass.** 잡 단위 GPU 귀속은 DCGM만으로는
+  할 수 없습니다. DCGM은 *이 GPU가 바쁘다*까지만 알려주고, GPU를 잡에
+  대응시키는 일은 잡 자신의 cgroup 안에서 `nvidia-smi -L`을 실행해서
+  이루어집니다. `nvidia-smi`는 nvidia 컨테이너 런타임이 컨테이너에
+  주입해 주는 것이라 이미지에 일부러 넣지 않았습니다. 그 바이너리는
+  호스트 드라이버와 버전이 맞아야 하기 때문입니다. 그래서 파드는
+  `NVIDIA_VISIBLE_DEVICES=all`과 `NVIDIA_DRIVER_CAPABILITIES=utility`를
+  선언하며, 해당 런타임이 노드 기본값이 아니라면
+  `slurm.jobExporter.runtimeClassName: nvidia`도 함께 설정해야 합니다.
+  toolkit이 없으면 파드는 뜨고 cgroup CPU·메모리도 그대로 보고하지만
+  `slurm_job_*_gpu` 시계열은 전부 사라지고, 이 exporter의 존재 이유인
+  `SlurmJobGpuIdle` 알림도 영영 발생하지 않습니다.
+- **Slurm 사용자가 `/etc/passwd`로 해석 가능할 것.** exporter는
+  `id --name --user <uid>`를 실행해 uid를 `user` 레이블로 바꾸는데,
+  파드에는 호스트의 `/etc/passwd`가 읽기 전용으로 바인드 마운트될
+  뿐입니다. 로컬 계정이 아니라 LDAP이나 SSSD로 Slurm 사용자를 해석하는
+  사이트에서는 이 조회가 예외를 던지고 `user` 레이블만이 아니라 *수집
+  전체*가 실패합니다. 컨테이너 안에서도 사용자가 보이게 하거나(예:
+  호스트의 `/var/lib/sss`를 추가로 마운트해 파드 안에서 NSS 경로가 살아
+  있게 함), 아니면 `jobTargets`로 exporter를 호스트의 systemd 서비스로
+  두어 노드 자신의 NSS 스택을 쓰게 하세요. Algalon은 이를 완화하려고
+  upstream 코드를 수정하지 않습니다.
+
+cgroup v2 참고: 수집기는 그 probe를 돌리려고 잡마다 수명이 짧은
+`gpu_probe` 자식 cgroup을 만듭니다. 그래서 `/sys/fs/cgroup` 마운트는
+의도적으로 **쓰기 가능**합니다. 읽기 전용으로 마운트하면 GPU 잡이 도는
+동안의 모든 수집이 실패합니다.
+
+```yaml
+slurm:
+  jobExporter:
+    enabled: true
+    image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
+    port: 9798
+    dcgmUpdateInterval: 10
+    # 런타임이 RuntimeClass 뒤에 있으면 "nvidia". nvidia 런타임이 이미
+    # 노드 기본값일 때만 비워 둡니다.
+    runtimeClassName: nvidia
+    nodeSelector: {}
+    tolerations: []
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+```
+
+이 포트는 **호스트** 포트입니다(`hostNetwork`에 더해 명시적인 `hostPort`).
+따라서 노드에서 이미 `:9798`을 잡고 있는 것이 있다면 — 십중팔구 같은
+exporter의 호스트 서비스 잔재입니다 — 파드가 스케줄되지 못하는 형태로
+드러납니다.
+
+`jobExporter`는 `slurm.jobExporter.enabled: true`만으로 렌더링됩니다.
+위에서 설명한 정적 `queueTargets`/`jobTargets` scrape 잡만 게이팅하는
+`slurm.enabled: true`는 필요하지 않습니다. 파드는 `algalon.io/scrape:
+"true"`와 `algalon.io/job: slurm-job` 레이블을 달고 있으므로,
+`algalon-pods` kubernetes_sd 잡이 `dcgm-exporter`나 `node-exporter`
+파드를 가져오는 것과 같은 방식으로 이 파드도 가져갑니다 — scrape 설정을
+바꿀 필요가 없습니다. `job`은 `algalon.io/job` 파드 레이블에서,
+`node`는 `__meta_kubernetes_pod_node_name`에서 오는데, 이는 `jobTargets`가
+정적 항목에 대해 손으로 붙이는 relabelling과 정확히 같습니다. 그래서
+어느 경로든 결과 시계열은 동일한 `job="slurm-job"`과 `node` 레이블을
+갖습니다.
+
+레이블이 같다는 점 덕분에 rule과 대시보드가 두 경로 사이에서 그대로
+통하지만, 이는 *레이블*에 대한 이야기일 뿐 커버리지에 대한 이야기가
+아닙니다. 위의 모든 rule·대시보드·조인은 **파드가 실제로 만들어 내는
+메트릭에 한해서** 변경 없이 적용됩니다. 위의 선행 조건 두 가지를 모두
+갖추면 그것이 전부이지만, nvidia 런타임을 빠뜨리면 GPU에서 파생되는
+절반 — Job Explorer의 GPU별 패널과 `SlurmJobGpuIdle` — 은 비어 있는 채로
+남고 CPU·메모리 쪽 절반만 멀쩡해 보입니다.
 
 ## 무엇을 얻게 되나
 
