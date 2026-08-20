@@ -13,7 +13,10 @@ VictoriaMetrics에 저장하고, 엄선된 일곱 개의 rule 그룹을 vmalert�
 Grafana 대시보드로 보여줍니다. 선택 사항인
 [Slurm 연동](docs/ko/slurm.md)을 켜면 rule 그룹 하나와 대시보드 두 개가
 더해져 스케줄러 큐 상태와 잡 단위 어카운팅까지 다루므로, 놀고 있는 GPU를
-붙잡은 잡과 사용자를 짚어낼 수 있습니다.
+붙잡은 잡과 사용자를 짚어낼 수 있습니다. 역시 선택 사항인 잡 로그
+파이프라인을 켜면 Slurm epilog가 종료된 잡의 stdout을 VictoriaLogs로
+보내므로, Job Explorer에서 실패한 잡의 출력을 메트릭 바로 옆에서 볼 수
+있습니다.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">

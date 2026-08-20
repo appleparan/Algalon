@@ -13,7 +13,10 @@ rule groups with vmalert, routes the results through Alertmanager
 to Slack, and renders the whole picture in six Grafana dashboards.
 Optional [Slurm integration](docs/slurm.md) adds an eighth rule group and
 two more dashboards covering scheduler queue state and per-job accounting,
-so an idle GPU can be named with the job and the user holding it.
+so an idle GPU can be named with the job and the user holding it. An
+optional job-log pipeline pairs those dashboards with logs: a Slurm
+epilog ships each finished job's stdout into VictoriaLogs, so the Job
+Explorer shows a failed job's output right next to its metrics.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
