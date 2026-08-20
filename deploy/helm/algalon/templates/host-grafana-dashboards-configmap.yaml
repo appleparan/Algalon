@@ -19,4 +19,9 @@ data:
   {{ base $path }}: |-
     {{- $.Files.Get $path | nindent 4 }}
 {{- end }}
+{{- range $name, $content := .Values.grafana.extraDashboards }}
+  {{/* Site-supplied dashboards (values), house-style is the site's call. */}}
+  extra-{{ $name }}.json: |-
+    {{- $content | nindent 4 }}
+{{- end }}
 {{- end }}
