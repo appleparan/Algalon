@@ -49,7 +49,7 @@ dashboards-validate: ## Validate Grafana dashboard JSON conventions
 		jq -e '.tags | index("algalon")' "$$f" >/dev/null || { echo "$$f: missing algalon tag"; exit 1; }; \
 		jq -e '.refresh == "30s"' "$$f" >/dev/null || { echo "$$f: refresh != 30s"; exit 1; }; \
 		jq -e '.templating.list | map(select(.type == "datasource")) | length >= 1' "$$f" >/dev/null || { echo "$$f: no datasource variable"; exit 1; }; \
-		jq -e '[.panels[] | select(.targets) | .targets[] | .datasource.uid] | all(. == "$${datasource}")' "$$f" >/dev/null || { echo "$$f: panel target not using \$${datasource}"; exit 1; }; \
+		jq -e '["$${datasource}", "$${logs_datasource}"] as $$ok | [.panels[] | select(.targets) | .targets[] | .datasource.uid] | all(IN($$ok[]))' "$$f" >/dev/null || { echo "$$f: panel target not using \$${datasource} or \$${logs_datasource}"; exit 1; }; \
 		jq -e '[.uid] as $$u | true' "$$f" >/dev/null; \
 	done; \
 	uids=$$(jq -r '.uid' monitoring/dashboards/*.json | sort | uniq -d); \

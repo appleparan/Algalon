@@ -939,6 +939,43 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "${logs_datasource}"
+      },
+      "description": "Requires the opt-in job log pipeline: VictoriaLogs (compose profile `logs` / `victorialogs.enabled`) plus the EpilogSlurmctld hook monitoring/slurm/epilog-logpush.sh on the Slurm controller. Output is pushed once when the job ends — nothing appears while the job is still running, nothing appears for jobs that finished before the pipeline was installed, and nothing appears at all when the pipeline is off. Only the last 10 MiB of stdout is shipped (ALGALON_LOG_MAX_BYTES). See docs/slurm.md.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 11,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "${logs_datasource}"
+          },
+          "expr": "{slurmjobid=\"$job_id\"}",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "title": "Job output (stdout)",
+      "type": "logs"
     }
   ],
   "preload": false,
@@ -958,6 +995,20 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Logs data source",
+        "multi": false,
+        "name": "logs_datasource",
+        "options": [],
+        "query": "victoriametrics-logs-datasource",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
