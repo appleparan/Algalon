@@ -75,7 +75,7 @@ slurm:
   # set; both at once double-scrapes the same jobs.
   jobExporter:
     enabled: false
-    image: ghcr.io/appleparan/slurm-job-exporter:0.5.0
+    image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
     port: 9798
     dcgmUpdateInterval: 10
     nodeSelector: {}
