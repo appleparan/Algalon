@@ -65,6 +65,7 @@ helm-sync: ## Sync monitoring/ content into the Helm chart files/ dir (generated
 # the render rather than shipping a broken notifier — so validation supplies
 # throwaway URLs. Never point these at a real workspace.
 HELM_VALIDATE_SET := --set allSmi.enabled=true \
+	--set victorialogs.enabled=true \
 	--set alertmanager.slack.criticalUrl=https://hooks.example/x \
 	--set alertmanager.slack.warningUrl=https://hooks.example/y
 

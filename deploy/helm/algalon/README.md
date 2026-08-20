@@ -30,6 +30,7 @@ shipped):
 | `<release>-victoriametrics` | 8428 | TSDB / query API |
 | `<release>-vmalert` | 8880 | rule evaluation |
 | `<release>-alertmanager` | 9093 | routing + Slack |
+| `<release>-victorialogs` | 9428 | job logs, only when `victorialogs.enabled` |
 
 Change `grafana.adminPassword` from the default `admin` before exposing
 Grafana beyond a port-forward.
@@ -109,6 +110,10 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `victoriametrics.retentionMonths` | `3` | `--retentionPeriod` (VM's unitless default is months) |
 | `victoriametrics.storage.size` | `50Gi` | PVC size (StatefulSet) |
 | `victoriametrics.storage.storageClassName` | `""` | `""` = cluster default |
+| `victorialogs.enabled` | `false` | optional job-log store, fed by the Slurm epilog push — see [Slurm integration](../../../docs/slurm.md) |
+| `victorialogs.retentionMonths` | `3` | `--retentionPeriod` (unitless = months here too) |
+| `victorialogs.storage.size` | `20Gi` | PVC size (StatefulSet) |
+| `victorialogs.storage.storageClassName` | `""` | `""` = cluster default |
 | `vmagent.scrapeInterval` | `30s` | global scrape interval |
 | `vmagent.extraScrapeConfigs` | `""` | site-supplied `scrape_configs` YAML fragment, appended verbatim — see [Site extensions](#site-extensions) |
 | `vmalert.evaluationInterval` | `30s` | rule evaluation interval |
@@ -118,6 +123,7 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `alertmanager.slack.warningUrl` | `""` | as above; both URLs required together |
 | `grafana.adminUser` | `admin` | `GF_SECURITY_ADMIN_USER` |
 | `grafana.adminPassword` | `admin` | `GF_SECURITY_ADMIN_PASSWORD` — change it |
+| `grafana.installPlugins` | `[victoriametrics-logs-datasource 0.31.0]` | `GF_INSTALL_PLUGINS`; downloaded on first start, set `[]` when air-gapped |
 | `grafana.extraDashboards` | `{}` | site-supplied dashboards, `<name>` → JSON — see [Site extensions](#site-extensions) |
 <!-- markdownlint-enable MD013 -->
 
