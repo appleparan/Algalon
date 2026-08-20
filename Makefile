@@ -71,6 +71,11 @@ helm-validate: helm-sync ## Lint and schema-validate the Helm chart
 	@helm lint deploy/helm/algalon $(HELM_VALIDATE_SET)
 	@helm template algalon deploy/helm/algalon $(HELM_VALIDATE_SET) \
 		| docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_TAG) -strict -summary
+	@helm template algalon deploy/helm/algalon $(HELM_VALIDATE_SET) \
+		--set-file 'vmalert.extraRules.citest=tests/fixtures/helm-extras/rules.yaml' \
+		--set-file 'grafana.extraDashboards.citest=tests/fixtures/helm-extras/dashboard.json' \
+		--set-file 'vmagent.extraScrapeConfigs=tests/fixtures/helm-extras/scrape.yaml' \
+		| docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_TAG) -strict -summary
 	@echo "✅ helm chart valid"
 
 # Not part of the validation gate: needs docker + k3d and takes minutes.

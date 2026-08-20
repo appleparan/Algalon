@@ -181,9 +181,15 @@ forking it:
 Inject at install/upgrade time with `--set-file`, one entry per file:
 
     helm upgrade algalon deploy/helm/algalon \
+      --namespace algalon --reuse-values \
       --set-file 'vmalert.extraRules.h100-serving=path/to/rules.yaml' \
       --set-file 'grafana.extraDashboards.h100-serving=path/to/dashboard.json' \
       --set-file 'vmagent.extraScrapeConfigs=path/to/scrape.yaml'
+
+`--reuse-values` is required: without it, this command drops every value
+set at install time — including the Slack webhook configuration — and
+trips the chart's Slack guard (see [Slack webhooks are
+required](#slack-webhooks-are-required)).
 
 Supply the files with LF line endings — CRLF content keeps literal `\r`
 bytes in the rendered manifest.
@@ -191,6 +197,11 @@ bytes in the rendered manifest.
 Validating injected content is the site's responsibility: the chart's
 `rules-test` / `dashboards-validate` targets cover only the chart's own
 `monitoring/` files, not whatever a site injects through these values.
+Injected dashboards must not reuse an existing dashboard `uid` (the
+chart's own dashboards use `algalon-*`) — a colliding uid makes the
+Grafana file provisioner silently skip the file. Keep an eye on the
+shared ConfigMap's 1MiB ceiling too: the chart's own dashboards are
+~160KiB, so there is headroom but it isn't unlimited.
 
 The vmagent, vmalert and Grafana Deployments already carry `checksum/*`
 annotations on their respective ConfigMaps, so a plain `helm upgrade` with
