@@ -23,14 +23,14 @@ to keep its exporters listening.
 | VictoriaMetrics | Time series storage |
 | vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
-| Grafana | Five auto-provisioned dashboards |
+| Grafana | Eight auto-provisioned dashboards |
 
 `monitoring/` is the single source of truth for the rules, dashboards,
 scrape config, Alertmanager policy and the DCGM counter set. Docker
 Compose bind-mounts that directory and Helm packages it into ConfigMaps —
 nothing is ever copied into `deploy/`.
 
-## The six core rule groups
+## The seven core rule groups
 
 Each group in `monitoring/rules/` encodes a finding from the Lablup
 report, and each rule carries an inline citation to the section, table or
@@ -82,6 +82,31 @@ NFS/RPC queueing, because the report's §4.2.5 found that 93.1 % of WRITE
 latency was client-side queue time, not server response time. This whole
 group requires node-exporter's `--collector.mountstats`.
 
+### `slo` — service level indicators
+
+The other groups answer *what broke*. This one answers *is the cluster
+serving its users* — the symptom layer at the top of Google's SRE
+golden-signals hierarchy, and the only group with no alerts in it. Four
+recording rules publish instantaneous 0–1 ratios as `algalon:sli:*`:
+exporter availability (`avg(up)`, the SLI for Algalon itself), Slurm node
+availability (DOWN and DRAIN both count as unusable), GPU health (below
+92 °C *and* not hardware-throttled) and NFS latency (active
+`(instance, operation)` paths inside the 100 ms/op budget; an idle
+filesystem counts as served). A fifth rule records newly failed jobs in
+the trailing hour — a count, not a ratio, because the queue exporter
+publishes gauges only; the exact success ratio waits on the sacct
+collector.
+
+The thresholds are reused verbatim from the alert groups — 92 °C is
+`GpuTempCritical`, bitmask ≥ 8 is `GpuClocksThrottled`, 100 ms/op is
+`NfsOperationSlow` — so the SLIs and the pages never disagree about what
+"unhealthy" means. SLO targets, 30-day windows and error budgets live in
+the dashboard instead of here: they are per-fleet decisions, and a window
+baked into a recording rule cannot be re-asked at query time. The
+Slurm-derived SLIs produce no series at all when the optional Slurm
+exporters are absent, so the dashboard shows them as unmeasured rather
+than as a defaulted 0 or 1.
+
 ### `meta` — monitoring the monitoring
 
 Exporter-down alerts, a "DCGM silent while the target is up" guard, and
@@ -89,10 +114,10 @@ the `Watchdog` dead-man's switch: an always-firing alert routed to a null
 receiver, whose *absence* at the receiver proves the alerting pipeline
 itself is broken.
 
-Rule unit tests for all six groups live in `tests/rules/` and run
+Rule unit tests for all seven groups live in `tests/rules/` and run
 without any GPU hardware.
 
-With Slurm integration enabled, an optional seventh group (`slurm`) adds
+With Slurm integration enabled, an optional eighth group (`slurm`) adds
 queue and job-accounting alerts — see [Slurm integration](slurm.md).
 
 ## Alerting policy
@@ -106,9 +131,12 @@ notifier.
 
 ## Dashboards
 
-Seven Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+Eight Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
 into the **Algalon** folder:
 
+- **SLO Overview** — the symptom-first entry point: 30-day compliance
+  for each SLI against its SLO target, the error budget left to spend,
+  what is firing right now, and the node-availability burn rate.
 - **Alert Center** — what is firing right now, by severity and node,
   plus the Watchdog pipeline check and an exporter up/down matrix.
 - **GPU Fleet Overview** — per-GPU utilization stripes over time (pale

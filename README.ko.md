@@ -8,8 +8,8 @@ Algalon은 대규모 GPU 학습 클러스터를 관측하면서, 단순히 *무�
 사실이 아니라 *그 장애를 복구하려면 어떤 조치가 필요한지* — 잡을 재시작할지,
 GPU를 리셋할지, 노드를 리부팅할지 — 를 운영자에게 알려줍니다. 모든 GPU
 노드에서 DCGM, OS, 그리고 선택적으로 크로스 플랫폼 하드웨어 메트릭을 수집해
-VictoriaMetrics에 저장하고, 엄선된 여섯 개의 alert rule 그룹을 vmalert로
-평가한 뒤 Alertmanager를 거쳐 Slack으로 라우팅하며, 전체 상황을 다섯 개의
+VictoriaMetrics에 저장하고, 엄선된 일곱 개의 rule 그룹을 vmalert로
+평가한 뒤 Alertmanager를 거쳐 Slack으로 라우팅하며, 전체 상황을 여섯 개의
 Grafana 대시보드로 보여줍니다. 선택 사항인
 [Slurm 연동](docs/ko/slurm.md)을 켜면 rule 그룹 하나와 대시보드 두 개가
 더해져 스케줄러 큐 상태와 잡 단위 어카운팅까지 다루므로, 놀고 있는 GPU를
@@ -82,7 +82,7 @@ save/load 구간 임계값, NFS 큐 대기 시간 분석이 모두 alert rule과
 
 | 문서 | 내용 |
 | --- | --- |
-| [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 여섯 개 rule 그룹, 알림 정책, 다섯 개 대시보드 |
+| [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 일곱 개 rule 그룹, 알림 정책, 여덟 개 대시보드 |
 | [배포](docs/ko/deployment.md) | 배포 방식 선택, k3s와 Docker 공존, 시크릿 관리 |
 | [개발](docs/ko/development.md) | 검증 타깃, rule 유닛 테스트, k3d 엔드투엔드 스모크 테스트 |
 | [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인 |

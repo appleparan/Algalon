@@ -23,14 +23,14 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | VictoriaMetrics | 시계열 저장소 |
 | vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
-| Grafana | 자동 프로비저닝되는 일곱 개 대시보드 |
+| Grafana | 자동 프로비저닝되는 여덟 개 대시보드 |
 
 rule, 대시보드, scrape 설정, Alertmanager 정책, DCGM 카운터 세트의 단일
 진실 공급원은 `monitoring/` 디렉터리입니다. Docker Compose는 이 디렉터리를
 bind-mount하고 Helm은 ConfigMap으로 패키징합니다. `deploy/` 아래로 복사되는
 파일은 하나도 없습니다.
 
-## 여섯 개의 핵심 rule 그룹
+## 일곱 개의 핵심 rule 그룹
 
 `monitoring/rules/`의 각 그룹은 Lablup 리포트의 분석 결과 하나씩을 구현하며,
 모든 rule에는 근거가 된 절·표·그림 번호가 인라인 인용으로 달려 있습니다.
@@ -81,6 +81,29 @@ recording rule이 NFS 처리량을 기준으로 학습 루프를 save/load 구�
 측 큐 대기 시간이었기 때문입니다. 이 그룹 전체는 node-exporter의
 `--collector.mountstats`를 필요로 합니다.
 
+### `slo` — 서비스 수준 지표
+
+다른 그룹들이 *무엇이 고장났는가*에 답한다면, 이 그룹은 *클러스터가
+사용자에게 제대로 서비스하고 있는가*에 답합니다. Google SRE golden
+signals 계층의 최상단에 있는 증상(symptom) 레이어이며, 알림이 하나도 없는
+유일한 그룹입니다. 네 개의 recording rule이 순간값 0–1 비율을
+`algalon:sli:*`로 기록합니다. exporter 가용성(`avg(up)`, Algalon 자신의
+SLI), Slurm 노드 가용성(DOWN과 DRAIN 모두 사용 불가로 계산), GPU
+건전성(92 °C 미만이면서 *동시에* 하드웨어 throttling이 없는 상태), NFS
+지연(활성 `(instance, operation)` 경로가 100 ms/op 예산 안에 있는지, 유휴
+파일시스템은 정상으로 계산)입니다. 다섯 번째 rule은 최근 한 시간 동안 새로
+실패한 잡 수를 기록하는데, 큐 exporter가 게이지만 노출하기 때문에 비율이
+아니라 개수입니다. 정확한 성공 비율은 sacct 수집기를 기다립니다.
+
+임계값은 알림 그룹에서 그대로 재사용합니다. 92 °C는 `GpuTempCritical`,
+비트마스크 ≥ 8은 `GpuClocksThrottled`, 100 ms/op은 `NfsOperationSlow`이며,
+덕분에 SLI와 호출이 "비정상"의 정의를 두고 어긋날 일이 없습니다. SLO
+목표치, 30일 윈도우, 에러 버짓은 이 파일이 아니라 대시보드에 있습니다.
+클러스터마다 달라지는 결정이고, recording rule에 윈도우를 박아 넣으면
+쿼리 시점에 다시 물어볼 수 없기 때문입니다. Slurm 기반 SLI는 선택 사항인
+Slurm exporter가 없으면 시계열 자체를 만들지 않습니다. 대시보드가 이를 0이나
+1로 단정하지 않고 "측정되지 않음"으로 보여주게 하기 위해서입니다.
+
 ### `meta` — 모니터링을 모니터링하기
 
 exporter down 알림, "타깃은 살아 있는데 DCGM만 조용한" 상황을 잡는 가드,
@@ -88,10 +111,10 @@ exporter down 알림, "타깃은 살아 있는데 DCGM만 조용한" 상황을 �
 만들어 null receiver로 보내는 알림이며, 수신 측에서 이 알림이 *보이지
 않는다는 사실* 자체가 알림 파이프라인이 망가졌다는 증거가 됩니다.
 
-여섯 그룹 전체에 대한 rule 유닛 테스트는 `tests/rules/`에 있고, GPU 하드웨어
+일곱 그룹 전체에 대한 rule 유닛 테스트는 `tests/rules/`에 있고, GPU 하드웨어
 없이 실행됩니다.
 
-Slurm 통합을 켜면 큐·잡 accounting 알림을 담은 선택적 일곱 번째 그룹
+Slurm 통합을 켜면 큐·잡 accounting 알림을 담은 선택적 여덟 번째 그룹
 (`slurm`)이 추가됩니다 — [Slurm 통합](slurm.md)을 참고하세요.
 
 ## 알림 정책
@@ -104,9 +127,12 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
 
 ## 대시보드
 
-`monitoring/dashboards/`의 Grafana 대시보드 일곱 개가 **Algalon** 폴더로
+`monitoring/dashboards/`의 Grafana 대시보드 여덟 개가 **Algalon** 폴더로
 자동 프로비저닝됩니다.
 
+- **SLO Overview** — 증상부터 보는 진입점. 각 SLI의 30일 준수율을 SLO
+  목표치와 비교해 보여주고, 남은 에러 버짓, 지금 발생 중인 알림,
+  노드 가용성 소진율(burn rate)을 함께 제공합니다.
 - **Alert Center** — 지금 발생 중인 알림을 severity와 노드별로 보여주고,
   Watchdog 파이프라인 점검과 exporter up/down 매트릭스를 함께 제공합니다.
 - **GPU Fleet Overview** — GPU별 사용률을 시간축 스트라이프로 표시해(연한

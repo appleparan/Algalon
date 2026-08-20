@@ -1,0 +1,112 @@
+# Service Level Indicators — the symptom layer (issue #15, Phase 1).
+#
+# Every other rule group in this directory answers "what broke?" from a
+# cause: an XID code, a remap counter, a throttle bitmask. Google's SRE
+# golden signals argue the top of an alerting hierarchy must instead
+# answer "is the cluster serving its users?" — a small set of symptom
+# measurements that stay meaningful when the cause is unknown.
+#
+# Each rule here records one SLI as an **instantaneous 0-1 ratio**: 1 is
+# a perfectly served interval, 0 a completely unserved one. Deliberately
+# absent from this file:
+#   * SLO targets and error budgets — they are product decisions that get
+#     retuned per fleet, so they live as dashboard thresholds
+#     (`slo-overview.json`), not as numbers frozen into recording rules.
+#   * long windows — 30-day compliance is `avg_over_time(<sli>[30d])` at
+#     query time. Recording a windowed average here would bake the window
+#     in and force a rule change to look at 7d or 90d.
+#   * alerts — burn-rate paging needs the exact job success ratio from the
+#     sacct textfile collector (Phase 3). Alerting on an approximation
+#     would train operators to ignore the page.
+#
+# Slurm-derived SLIs (node availability, job failures) intentionally
+# produce *no series* when the optional Slurm exporters are not deployed:
+# an absent SLI reads as "not measured" on the dashboard, whereas a
+# defaulted 0 or 1 would be an outright lie about an unmonitored cluster.
+groups:
+  - name: slo
+    interval: 30s
+    rules:
+      # Observability availability: the fraction of scrape targets that
+      # answered. This is the SLI for Algalon itself — every other rule
+      # group is blind on a target that is down, so a dip here caps how
+      # much the rest of this file can be trusted.
+      - record: algalon:sli:exporter_availability
+        expr: avg(up)
+
+      # Capacity availability from the scheduler's point of view: the
+      # share of Slurm nodes that can actually accept work. DOWN and DRAIN
+      # are both counted as unavailable — a drained node is as unusable to
+      # a queued job as a dead one, whatever the operator intended
+      # (`SlurmNodeDown` / `SlurmNodeDrained` in slurm.yml make the same
+      # distinction for paging, which is where intent matters).
+      #
+      # `or vector(0)` covers the healthy case where the exporter simply
+      # omits the down/drain series; the denominator has no such guard on
+      # purpose, so without the queue exporter the whole expression is
+      # empty and the SLI is absent rather than a false 1.
+      - record: algalon:sli:slurm_node_availability
+        expr: >-
+          1 - (
+            (sum(slurm_node_count_per_state{state=~"down|drain"}) or vector(0))
+              / sum(slurm_node_count_per_state)
+          )
+
+      # Fleet hardware health: the fraction of GPUs that are simultaneously
+      # below the critical thermal band and not hardware-throttled. The two
+      # thresholds are the alert thresholds from gpu-health.yml, reused
+      # verbatim so the SLI and the pages agree on what "unhealthy" means:
+      # 92C is `GpuTempCritical`, bitmask >= 8 is `GpuClocksThrottled`
+      # (bits below 8 are benign idle/app-clock/SW-power-cap reasons).
+      #
+      # Both series come from the same dcgm-exporter with identical
+      # {instance, gpu, ...} labelsets, and `< bool` drops the metric name,
+      # so the multiplication matches one-to-one per GPU and yields 1 only
+      # when both conditions hold. Unlike the alerts there is no `for:`
+      # hold: an SLI measures every interval, and the smoothing belongs in
+      # the 30-day window the dashboard applies.
+      - record: algalon:sli:gpu_health
+        expr: >-
+          avg(
+            (DCGM_FI_DEV_GPU_TEMP < bool 92)
+            * (DCGM_FI_DEV_CLOCKS_EVENT_REASONS < bool 8)
+          )
+
+      # Storage latency: the fraction of active NFS (instance, operation)
+      # paths whose mean service time is inside the 100ms budget — the same
+      # threshold `NfsOperationSlow` pages on in storage-nfs.yml, chosen
+      # there because the Lablup report (Fig 3) shows GETATTR normally at
+      # ~10ms and spiking before worker death.
+      #
+      # Two guards make this an honest ratio on a quiet cluster:
+      #   * `> 0` on the denominator drops mounts with no traffic in the
+      #     window, so their 0/0 NaN never pollutes the average;
+      #   * `or vector(1)` turns "no active path anywhere" into 1, because
+      #     an idle filesystem produced no slow operations. Without it an
+      #     idle night would punch a hole in the 30-day compliance line.
+      # Requires node_exporter --collector.mountstats, like the rest of the
+      # NFS signals.
+      - record: algalon:sli:nfs_latency_ok
+        expr: >-
+          avg(
+            (
+              sum by (instance, operation) (rate(node_mountstats_nfs_operations_response_time_seconds_total[5m]))
+                /
+              (sum by (instance, operation) (rate(node_mountstats_nfs_operations_requests_total[5m])) > 0)
+            ) < bool 0.1
+          ) or vector(1)
+
+      # Workload outcome, approximated. The honest SLI is
+      # succeeded / (succeeded + failed) per job, but the queue exporter
+      # publishes only per-state *gauges* — a job that fails and is purged
+      # from the accounting window makes the gauge fall, and no gauge tells
+      # us how many jobs finished cleanly. So this records the count of
+      # newly failed jobs in the trailing hour: not a ratio, and therefore
+      # deliberately not one of the four ratio SLIs above.
+      #
+      # `clamp_min(..., 0)` absorbs the drops (slurmctld restart, purge)
+      # that would otherwise show as negative failures. The exact success
+      # ratio arrives with the sacct textfile collector in Phase 3, which
+      # is also what unlocks burn-rate alerting.
+      - record: algalon:sli:job_failures_1h
+        expr: clamp_min(delta(slurm_job_count_per_state{state="failed"}[1h]), 0)

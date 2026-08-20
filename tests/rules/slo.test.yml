@@ -1,0 +1,155 @@
+rule_files:
+  - ../../monitoring/rules/slo.yml
+
+evaluation_interval: 30s
+
+tests:
+  # --- algalon:sli:exporter_availability --------------------------------
+  # Four scrape targets, two of them dark: the SLI is the fraction of the
+  # fleet Algalon can actually see, so 2/4 -> 0.5.
+  - interval: 30s
+    input_series:
+      - series: 'up{job="dcgm", instance="w1:9400"}'
+        values: '1x20'
+      - series: 'up{job="dcgm", instance="w2:9400"}'
+        values: '1x20'
+      - series: 'up{job="node", instance="w3:9100"}'
+        values: '0x20'
+      - series: 'up{job="node", instance="w4:9100"}'
+        values: '0x20'
+    metricsql_expr_test:
+      - expr: algalon:sli:exporter_availability
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:sli:exporter_availability'
+            value: 0.5
+
+  # --- algalon:sli:slurm_node_availability ------------------------------
+  # 10 nodes: 5 alloc + 3 idle + 1 drain + 1 down. Two of them are
+  # unusable, so the scheduler-visible availability is 0.8.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="alloc", instance="slurmctld.example:9092"}'
+        values: '5x20'
+      - series: 'slurm_node_count_per_state{state="idle", instance="slurmctld.example:9092"}'
+        values: '3x20'
+      - series: 'slurm_node_count_per_state{state="drain", instance="slurmctld.example:9092"}'
+        values: '1x20'
+      - series: 'slurm_node_count_per_state{state="down", instance="slurmctld.example:9092"}'
+        values: '1x20'
+    metricsql_expr_test:
+      - expr: algalon:sli:slurm_node_availability
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:sli:slurm_node_availability'
+            value: 0.8
+
+  # Healthy cluster: the down/drain series exist but are zero -> exactly 1.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_node_count_per_state{state="alloc", instance="slurmctld.example:9092"}'
+        values: '5x20'
+      - series: 'slurm_node_count_per_state{state="idle", instance="slurmctld.example:9092"}'
+        values: '3x20'
+      - series: 'slurm_node_count_per_state{state="drain", instance="slurmctld.example:9092"}'
+        values: '0x20'
+      - series: 'slurm_node_count_per_state{state="down", instance="slurmctld.example:9092"}'
+        values: '0x20'
+    metricsql_expr_test:
+      - expr: algalon:sli:slurm_node_availability
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:sli:slurm_node_availability'
+            value: 1
+
+  # --- algalon:sli:gpu_health -------------------------------------------
+  # Four GPUs: gpu0/gpu3 healthy, gpu1 hardware-throttled (bitmask 8),
+  # gpu2 above the 92C critical band. Both defects count once -> 2/4.
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="w1:9400", gpu="0"}'
+        values: '60x20'
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="w1:9400", gpu="0"}'
+        values: '0x20'
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="w1:9400", gpu="1"}'
+        values: '60x20'
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="w1:9400", gpu="1"}'
+        values: '8x20'
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="w1:9400", gpu="2"}'
+        values: '95x20'
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="w1:9400", gpu="2"}'
+        values: '0x20'
+      - series: 'DCGM_FI_DEV_GPU_TEMP{instance="w1:9400", gpu="3"}'
+        values: '60x20'
+      - series: 'DCGM_FI_DEV_CLOCKS_EVENT_REASONS{instance="w1:9400", gpu="3"}'
+        values: '0x20'
+    metricsql_expr_test:
+      - expr: algalon:sli:gpu_health
+        eval_time: 5m
+        exp_samples:
+          - labels: 'algalon:sli:gpu_health'
+            value: 0.5
+
+  # --- algalon:sli:nfs_latency_ok ---------------------------------------
+  # Two active mount paths at the same request rate (10 req/s):
+  #   w1 READ  0.1 s/s over 10 req/s =  10 ms/op -> good
+  #   w2 WRITE 2.0 s/s over 10 req/s = 200 ms/op -> bad
+  # -> half of the active paths meet the 100 ms budget.
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_requests_total{instance="w1:9100", operation="READ"}'
+        values: '0+300x60'
+      - series: 'node_mountstats_nfs_operations_response_time_seconds_total{instance="w1:9100", operation="READ"}'
+        values: '0+3x60'
+      - series: 'node_mountstats_nfs_operations_requests_total{instance="w2:9100", operation="WRITE"}'
+        values: '0+300x60'
+      - series: 'node_mountstats_nfs_operations_response_time_seconds_total{instance="w2:9100", operation="WRITE"}'
+        values: '0+60x60'
+    metricsql_expr_test:
+      - expr: algalon:sli:nfs_latency_ok
+        eval_time: 15m
+        exp_samples:
+          - labels: 'algalon:sli:nfs_latency_ok'
+            value: 0.5
+
+  # Idle cluster: the counters exist but never advance, so every path is
+  # filtered out of the average. No NFS traffic means no bad events, which
+  # the `or vector(1)` arm turns into a perfect SLI rather than no data.
+  - interval: 30s
+    input_series:
+      - series: 'node_mountstats_nfs_operations_requests_total{instance="w1:9100", operation="READ"}'
+        values: '100x60'
+      - series: 'node_mountstats_nfs_operations_response_time_seconds_total{instance="w1:9100", operation="READ"}'
+        values: '5x60'
+    metricsql_expr_test:
+      - expr: algalon:sli:nfs_latency_ok
+        eval_time: 15m
+        exp_samples:
+          - labels: 'algalon:sli:nfs_latency_ok'
+            value: 1
+
+  # --- algalon:sli:job_failures_1h --------------------------------------
+  # Failed-job gauge climbs 2 -> 5 inside the trailing hour.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="failed", instance="slurmctld.example:9092"}'
+        values: '2x120 5x120'
+    metricsql_expr_test:
+      - expr: algalon:sli:job_failures_1h
+        eval_time: 90m
+        exp_samples:
+          - labels: 'algalon:sli:job_failures_1h{instance="slurmctld.example:9092", state="failed"}'
+            value: 3
+
+  # The gauge can also fall (slurmctld restart, accounting rollover). A
+  # negative delta is not "minus three failures" — clamp_min pins it at 0.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_count_per_state{state="failed", instance="slurmctld.example:9092"}'
+        values: '5x120 2x120'
+    metricsql_expr_test:
+      - expr: algalon:sli:job_failures_1h
+        eval_time: 90m
+        exp_samples:
+          - labels: 'algalon:sli:job_failures_1h{instance="slurmctld.example:9092", state="failed"}'
+            value: 0
