@@ -115,6 +115,49 @@ slurm:
 조인이 조용히 아무것도 매칭하지 못합니다. 차트 문서는
 [`deploy/helm/algalon/`](../../deploy/helm/algalon/README.md)에 있습니다.
 
+### 클러스터 내부 jobExporter (DaemonSet)
+
+위의 `jobTargets`는 계산 노드가 클러스터 바깥에 있다고 가정합니다. 계산
+노드가 클러스터 멤버라면, 정적으로 나열하는 대신
+`slurm.jobExporter.enabled: true`로 slurm-job-exporter를 DaemonSet으로
+실행하세요. 같은 노드 집합에 대해서는 `jobTargets`와 `jobExporter` 중
+하나만 켭니다 — 둘 다 켜면 같은 잡을 이중으로 scrape하게 됩니다.
+
+DaemonSet도 GPU별 메트릭을 읽으려면 DCGM 엔진이 필요하지만, 이번에는
+자기 파드에 내장된 엔진이 아니라 호스트 쪽 엔진을 씁니다. 각 노드에는
+이미 `:5555`에서 대기하는 호스트 쪽 `nv-hostengine`이 떠 있어야 하고,
+exporter는 `hostNetwork`를 통해 그 엔진에 remote client로 붙습니다. 같은
+노드에서 `dcgm-exporter` DaemonSet도 돌고 있다면, `dcgmExporter.extraArgs:
+["-r", "localhost:5555"]`와 `dcgmExporter.hostNetwork: true`로 동일한
+엔진을 가리키게 하세요 — 한 노드에서 두 개의 DCGM 엔진이 동시에
+`DCGM_FI_PROF_*` 필드를 볼 수는 없으므로, `dcgm-exporter`와
+slurm-job-exporter는 호스트 쪽 엔진 하나를 공유해야 합니다.
+
+```yaml
+slurm:
+  jobExporter:
+    enabled: true
+    image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
+    port: 9798
+    dcgmUpdateInterval: 10
+    nodeSelector: {}
+    tolerations: []
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+```
+
+`jobExporter`는 `slurm.jobExporter.enabled: true`만으로 렌더링됩니다.
+위에서 설명한 정적 `queueTargets`/`jobTargets` scrape 잡만 게이팅하는
+`slurm.enabled: true`는 필요하지 않습니다. 파드는 `algalon.io/scrape:
+"true"`와 `algalon.io/job: slurm-job` 레이블을 달고 있으므로,
+`algalon-pods` kubernetes_sd 잡이 `dcgm-exporter`나 `node-exporter`
+파드를 가져오는 것과 같은 방식으로 이 파드도 가져갑니다 — scrape 설정을
+바꿀 필요가 없습니다. `job`은 `algalon.io/job` 파드 레이블에서,
+`node`는 `__meta_kubernetes_pod_node_name`에서 오는데, 이는 `jobTargets`가
+정적 항목에 대해 손으로 붙이는 relabelling과 정확히 같습니다. 그래서
+어느 경로든 결과 시계열은 동일한 `job="slurm-job"`과 `node` 레이블을
+갖고, 위의 모든 rule·대시보드·조인이 변경 없이 그대로 적용됩니다.
+
 ## 무엇을 얻게 되나
 
 ### 알림

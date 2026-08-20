@@ -116,6 +116,51 @@ here must be the **Kubernetes node name**, not an arbitrary hostname —
 otherwise the join silently matches nothing. Chart reference:
 [`deploy/helm/algalon/`](../deploy/helm/algalon/README.md).
 
+### In-cluster jobExporter (DaemonSet)
+
+`jobTargets` above assumes the compute nodes live outside the cluster.
+When they are cluster members instead, run slurm-job-exporter as a
+DaemonSet with `slurm.jobExporter.enabled: true` rather than
+enumerating them statically. Enable either `jobTargets` or
+`jobExporter` for a given node set, not both — running both scrapes
+the same jobs twice.
+
+The DaemonSet still needs a DCGM engine to read per-GPU metrics, and it
+needs that engine on the host rather than embedded in its own pod: each
+node must already run a host-side `nv-hostengine` listening on `:5555`,
+with the exporter attaching to it as a remote client over
+`hostNetwork`. If the node's `dcgm-exporter` DaemonSet also runs there,
+point it at the same engine with `dcgmExporter.extraArgs: ["-r",
+"localhost:5555"]` and `dcgmExporter.hostNetwork: true` — two DCGM
+engines on one node cannot both watch the `DCGM_FI_PROF_*` fields, so
+`dcgm-exporter` and `slurm-job-exporter` must share the single
+host-side engine.
+
+```yaml
+slurm:
+  jobExporter:
+    enabled: true
+    image: ghcr.io/appleparan/slurm-job-exporter:0.4.12
+    port: 9798
+    dcgmUpdateInterval: 10
+    nodeSelector: {}
+    tolerations: []
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+```
+
+`jobExporter` renders on `slurm.jobExporter.enabled: true` alone; it
+does not require `slurm.enabled: true`, which only gates the static
+`queueTargets`/`jobTargets` scrape jobs described above. The pods carry
+`algalon.io/scrape: "true"` and `algalon.io/job: slurm-job`, so the
+`algalon-pods` kubernetes_sd job picks them up the same way it picks up
+`dcgm-exporter` and `node-exporter` pods — no scrape-config change is
+needed. `job` comes from the `algalon.io/job` pod label and `node` from
+`__meta_kubernetes_pod_node_name`, exactly the relabelling `jobTargets`
+gets by hand for its static entries, so the resulting series carry the
+same `job="slurm-job"` and `node` labels either way and every rule,
+dashboard and join above applies unchanged.
+
 ## What you get
 
 ### Alerts
