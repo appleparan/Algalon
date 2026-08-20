@@ -12,3 +12,4 @@ deploy/compose/**/.env
 
 # Helm chart generated content (make helm-sync)
 deploy/helm/algalon/files/
+.claude/
