@@ -40,6 +40,7 @@ compose-validate: ## Validate compose stacks
 	@docker compose -f deploy/compose/worker/docker-compose.yml config -q
 	@docker compose -f deploy/compose/worker/docker-compose.yml --profile all-smi config -q
 	@docker compose -f deploy/compose/host/docker-compose.yml config -q
+	@docker compose -f deploy/compose/host/docker-compose.yml --profile logs config -q
 	@echo "✅ compose stacks valid"
 
 dashboards-validate: ## Validate Grafana dashboard JSON conventions

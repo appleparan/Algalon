@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Job logs, provisioned unconditionally. The `logs` compose profile is
+# opt-in, so this may well point at a container that is not running —
+# Grafana tolerates that (the datasource simply fails its health check and
+# the Job Explorer logs panel stays empty). Never `isDefault`: every other
+# dashboard binds ${datasource} to the default Prometheus datasource.
+datasources:
+  - name: VictoriaLogs
+    type: victoriametrics-logs-datasource
+    access: proxy
+    url: http://victorialogs:9428
+    isDefault: false
+    editable: false
