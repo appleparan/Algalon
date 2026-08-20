@@ -15,33 +15,58 @@
       }
     ]
   },
-  "description": "One Slurm job at a time: who owns it, what its cgroup is consuming, and what the node-level GPU/storage/alert signals on its nodes look like. Fed by slurm-job-exporter (scrape job `slurm-job`) on every compute node; the `node` label on those targets is what joins job series to DCGM and node-exporter series.",
+  "description": "Is the fleet's GPU time actually doing work? DCGM_FI_DEV_GPU_UTIL only says a kernel was resident on the device - a GPU starved by its dataloader reads 100%. This dashboard walks the four layers of utilization quality: allocated (a job holds it), busy (a kernel is resident), actually computing (warps are executing), and computing efficiently (tensor cores, memory bandwidth, power against TDP). The gap between layers is the waste. It is the outcome measure for the scheduler policy decided on Algalon / Scheduler Analytics: good QoS policy shows up here as GPU-hours that do real work.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "algalon"
+      ],
+      "targetBlank": false,
+      "title": "Algalon dashboards",
+      "tooltip": "Drill down into the fleet, queue and node views",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Owner and accounting group of the selected job, read from the cgroup exporter's `user` and `account` labels.",
+      "description": "Fraction of time at least one warp was executing, averaged over every GPU. This is layer 3 of the utilization hierarchy - the first layer that means work is actually happening. Compare it with the GPU utilization line below: the gap between them is the fleet's hollow running.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              },
+              {
+                "color": "green",
+                "value": 0.5
               }
             ]
-          }
+          },
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -53,20 +78,20 @@
       },
       "id": 1,
       "options": {
-        "colorMode": "none",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "horizontal",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^(user|account)$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "auto",
         "wideLayout": true
       },
       "pluginVersion": "13.1.3",
@@ -77,15 +102,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "slurm_job_memory_usage{slurmjobid=\"$job_id\"}",
-          "format": "table",
+          "expr": "avg(DCGM_FI_PROF_SM_ACTIVE)",
           "instant": true,
-          "legendFormat": "__auto",
+          "legendFormat": "SM active",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Owner",
+      "title": "Fleet SM active",
       "type": "stat"
     },
     {
@@ -93,25 +117,32 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Resident memory held by the job's cgroup, summed over every node in the allocation.",
+      "description": "Fraction of time the tensor pipe was engaged, fleet-wide. Layer 4: not just computing, but computing on the units the hardware was bought for. A training fleet running fp32 kernels, or one bottlenecked on memory, sits near zero here while SM active looks healthy.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "green",
+                "value": 0.3
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -124,7 +155,7 @@
       "id": 2,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -147,14 +178,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(slurm_job_memory_usage{slurmjobid=\"$job_id\"})",
-          "instant": false,
-          "legendFormat": "memory",
-          "range": true,
+          "expr": "avg(DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)",
+          "instant": true,
+          "legendFormat": "tensor active",
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Memory usage",
+      "title": "Tensor core active",
       "type": "stat"
     },
     {
@@ -162,25 +193,32 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Processes inside the job's cgroup across all its nodes. A collapse toward zero while the job is still allocated usually means the workload died but the allocation did not.",
+      "description": "Average power draw against the enforced limit. The cheapest quality proxy there is, and it needs no profiling fields: a GPU doing real training work sits around 0.7-1.0, while one holding an allocation at idle clocks sits at 0.1-0.3. Read a low value here together with a high GPU utilization as hollow running.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 0,
+          "decimals": 2,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.4
+              },
+              {
+                "color": "green",
+                "value": 0.65
               }
             ]
           },
-          "unit": "none"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -193,7 +231,7 @@
       "id": 3,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -216,14 +254,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(slurm_job_process_count{slurmjobid=\"$job_id\"})",
-          "instant": false,
-          "legendFormat": "processes",
-          "range": true,
+          "expr": "avg(DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT)",
+          "instant": true,
+          "legendFormat": "power / TDP",
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Process count",
+      "title": "Power / TDP",
       "type": "stat"
     },
     {
@@ -231,7 +269,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "GPUs bound to the job's cgroup. This is the denominator for the allocation-waste question SlurmJobGpuIdle asks.",
+      "description": "GPUs claiming above 80% utilization while under 20% of the time has a warp executing. The `and` matches the two series one-to-one per {instance, gpu} - both come from the same dcgm-exporter with identical labelsets, and set operators ignore the metric name, so each GPU is judged against itself.\n\nEvery GPU counted here is being paid for and not used. GpuBusyButHollow pages on the same condition at node level after 30 minutes.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -239,13 +277,16 @@
           },
           "decimals": 0,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
           },
@@ -285,14 +326,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "count(slurm_job_utilization_gpu{slurmjobid=\"$job_id\"})",
+          "expr": "count(DCGM_FI_DEV_GPU_UTIL > 80 and DCGM_FI_PROF_SM_ACTIVE < 0.2) or vector(0)",
           "instant": true,
-          "legendFormat": "gpus",
+          "legendFormat": "hollow GPUs",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "GPU count",
+      "title": "Busy-but-hollow GPUs",
       "type": "stat"
     },
     {
@@ -300,7 +341,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Per-GPU utilization attributed to this job by the cgroup exporter \u2014 unlike DCGM, this is the job's own share of the device.",
+      "description": "The centrepiece of this dashboard. DCGM_FI_DEV_GPU_UTIL only reports that a kernel was resident on the device during the sample - a job whose dataloader cannot keep up, or one blocked in an NCCL all-reduce, keeps a kernel resident and reads near 100% while computing nothing. SM active is the layer below: is a warp actually running?\n\nThe gap between the two lines IS the waste signal. A wide, persistent gap means the bottleneck is input pipeline, CPU or interconnect - not the GPU, and not something more GPUs will fix. Utilization is divided by 100 so both lines share one 0-1 axis.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -310,301 +351,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "utilization",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 4
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "13.1.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "slurm_job_utilization_gpu{slurmjobid=\"$job_id\"}",
-          "instant": false,
-          "legendFormat": "{{node}} GPU {{gpu}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "GPU utilization per GPU",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "GPU framebuffer memory used by the job. Kept on its own panel \u2014 memory and power never share an axis.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "memory",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 4
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "13.1.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "slurm_job_memory_usage_gpu{slurmjobid=\"$job_id\"}",
-          "instant": false,
-          "legendFormat": "{{node}} GPU {{gpu}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "GPU memory used",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "GPU power draw for the job. slurm-job-exporter reports NVML milliwatts, so the query divides by 1000 to plot watts. Separate panel from GPU memory by design \u2014 no dual axes.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "power",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "watt"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 4
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "13.1.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "slurm_job_power_gpu{slurmjobid=\"$job_id\"} / 1000",
-          "instant": false,
-          "legendFormat": "{{node}} GPU {{gpu}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "GPU power",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Are your GPUs actually computing? The 'GPU utilization per GPU' panel above only tells you a kernel was resident on the device - if your dataloader cannot keep up, or you are waiting in an all-reduce, that panel still shows near 100%. This one shows the fraction of time a warp was really executing.\n\nIf GPU utilization above is high but SM active here is low, your input pipeline - not the GPU - is the bottleneck: look at data loading workers, augmentation on the CPU, or a slow shared filesystem. More GPUs will not help.\n\nNode-level: trustworthy for your job only if it owns the whole node.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "SM active",
+            "axisLabel": "fraction",
             "axisPlacement": "left",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -653,9 +400,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 4
       },
-      "id": 12,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [],
@@ -677,14 +424,26 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg by (node) (DCGM_FI_PROF_SM_ACTIVE) and on(node) (count by (node) (slurm_job_memory_usage{slurmjobid=\"$job_id\"}) > 0)",
+          "expr": "avg(DCGM_FI_DEV_GPU_UTIL) / 100",
           "instant": false,
-          "legendFormat": "{{node}}",
+          "legendFormat": "GPU util (claimed busy)",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg(DCGM_FI_PROF_SM_ACTIVE)",
+          "instant": false,
+          "legendFormat": "SM active (actually computing)",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "SM active on your job's nodes",
+      "title": "Claimed vs actual: GPU util vs SM active",
       "type": "timeseries"
     },
     {
@@ -692,7 +451,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "How hard your GPUs are actually being driven, as a share of their power limit. Real training work sits around 0.7-1.0; a GPU sitting at 0.1-0.3 is at idle clocks - allocated to you and doing nothing.\n\nThis is the same question as the panel on the left, answered without any profiling fields, so it works even where DCP metrics are unavailable. A sudden dip that matches a checkpoint save is normal; a persistent low value across a whole run is time you are being charged for and not using.\n\nNode-level: trustworthy for your job only if it owns the whole node.",
+      "description": "p10, p50 and p90 of power draw against the enforced limit, across every GPU in the fleet. A healthy training fleet clusters high and tight. A p10 dragging along the bottom while p50 stays high is the straggler pattern - a handful of GPUs idling inside jobs that hold them.\n\nThis panel needs no profiling fields: POWER_USAGE and ENFORCED_POWER_LIMIT are in the base counter set, which makes it the one quality signal available on a fleet that cannot enable DCP.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -751,9 +510,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 4
       },
-      "id": 13,
+      "id": 6,
       "options": {
         "legend": {
           "calcs": [],
@@ -775,14 +534,38 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg by (node) (DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT) and on(node) (count by (node) (slurm_job_memory_usage{slurmjobid=\"$job_id\"}) > 0)",
+          "expr": "quantile(0.1, DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT)",
           "instant": false,
-          "legendFormat": "{{node}}",
+          "legendFormat": "p10",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile(0.5, DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT)",
+          "instant": false,
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile(0.9, DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT)",
+          "instant": false,
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "Power / TDP on your job's nodes",
+      "title": "Power / TDP distribution across GPUs",
       "type": "timeseries"
     },
     {
@@ -790,7 +573,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "node-level signal joined on(node) \u2014 job-exclusive nodes read as job signal. DCGM sees the whole device, so on a shared node this includes other tenants; compare it against the cgroup utilization panel above.",
+      "description": "Layer 4 per node. Two nodes running the same model should look alike; one that does not is either running a different precision, falling back to non-tensor kernels, or throttled. Cross-check a low node against DCGM_FI_DEV_CLOCKS_EVENT_REASONS on Node Health before blaming the code - a thermally-braked GPU produces exactly this shape.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -800,8 +583,8 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "utilization",
-            "axisPlacement": "auto",
+            "axisLabel": "tensor active",
+            "axisPlacement": "left",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -829,10 +612,7 @@
               "mode": "off"
             }
           },
-          "decimals": 0,
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -842,7 +622,9 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit",
+          "min": 0,
+          "decimals": 3
         },
         "overrides": []
       },
@@ -850,7 +632,105 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "13.1.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg by (node) (DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)",
+          "instant": false,
+          "legendFormat": "{{node}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tensor core activity by node",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Memory-bound or compute-bound, fleet-wide. DRAM active well above SM active means the kernels are waiting on device memory rather than computing - the shape of an unfused, memory-bandwidth-limited workload. SM active well above DRAM active is the compute-bound case, which is where you want a training fleet to sit.\n\nBoth low, with GPU utilization high, is the memory-holding waste pattern: a job parked on the device doing neither.\n\nRequires the DCGM_FI_PROF_* profiling fields in monitoring/exporters/dcgm-counters.csv (Volta or newer; conflicts with a concurrent Nsight/profiler session). Empty without them.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "fraction",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
       },
       "id": 8,
       "options": {
@@ -874,14 +754,26 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg by (node) (DCGM_FI_DEV_GPU_UTIL) and on(node) (count by (node) (slurm_job_memory_usage{slurmjobid=\"$job_id\"}) > 0)",
+          "expr": "avg(DCGM_FI_PROF_DRAM_ACTIVE)",
           "instant": false,
-          "legendFormat": "{{node}} (DCGM)",
+          "legendFormat": "DRAM active",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg(DCGM_FI_PROF_SM_ACTIVE)",
+          "instant": false,
+          "legendFormat": "SM active",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "DCGM GPU utilization on this job's nodes",
+      "title": "DRAM active vs SM active",
       "type": "timeseries"
     },
     {
@@ -889,7 +781,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "node-level signal joined on(node) \u2014 job-exclusive nodes read as job signal. GETATTR latency is the storage-side counterpart of a stalled dataloader: a climb here explains GPUs going quiet without the job failing.",
+      "description": "Energy consumed by the fleet's GPUs, per hour.\n\nDCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION is a monotonic counter in MILLIJOULES since driver load (see monitoring/exporters/dcgm-counters.csv). 1 kWh = 3.6e6 J = 3.6e9 mJ, so the hourly increase is divided by 3.6e9 to give kWh. Read it against SM active above: the same kWh buying half the warp activity is the cost of hollow running, in the unit the facility is billed in.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -899,8 +791,8 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "latency",
-            "axisPlacement": "auto",
+            "axisLabel": "kWh",
+            "axisPlacement": "left",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -929,7 +821,6 @@
             }
           },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -939,14 +830,16 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "none",
+          "min": 0,
+          "decimals": 1
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 6,
+        "w": 16,
+        "x": 0,
         "y": 20
       },
       "id": 9,
@@ -971,14 +864,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(sum by (node) (rate(node_mountstats_nfs_operations_response_time_seconds_total{operation=\"GETATTR\"}[5m])) / sum by (node) (rate(node_mountstats_nfs_operations_requests_total{operation=\"GETATTR\"}[5m]))) and on(node) (count by (node) (slurm_job_memory_usage{slurmjobid=\"$job_id\"}) > 0)",
+          "expr": "sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[1h])) / 3.6e9",
           "instant": false,
-          "legendFormat": "{{node}} (NFS)",
+          "legendFormat": "kWh per hour",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "NFS GETATTR latency on this job's nodes",
+      "title": "Fleet energy draw",
       "type": "timeseries"
     },
     {
@@ -986,108 +879,50 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "node-level signal joined on(node) \u2014 job-exclusive nodes read as job signal. Every alert currently firing on a node this job occupies, so hardware faults can be read as job impact without leaving the job view.",
+      "description": "Fleet GPU energy over the last 7 days divided by the GPU-hours the scheduler actually handed out. Energy is converted from millijoules to kWh (/3.6e9) and GPU-seconds to hours (/3600), so the unit is kWh per allocated GPU-hour.\n\nIt is a ratio of what was spent to what was delivered, and it moves for two very different reasons: harder work per GPU-hour pushes it up honestly, while GPUs burning idle power inside allocations that deliver nothing push it up too. Pair it with SM active before drawing a conclusion.\n\nRequires the opt-in sacct textfile collector (monitoring/slurm/sacct-textfile.sh) on the slurmctld host; empty without it.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": true,
-            "inspect": false
-          },
+          "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "blue",
                 "value": null
               }
             ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "severity"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "critical": {
-                        "color": "red",
-                        "index": 0,
-                        "text": "critical"
-                      },
-                      "warning": {
-                        "color": "orange",
-                        "index": 1,
-                        "text": "warning"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "alertname"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 220
-              }
-            ]
-          }
-        ]
+          "unit": "none"
+        },
+        "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 28
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 20
       },
       "id": 10,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
           ],
-          "show": false
+          "fields": "",
+          "values": false
         },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "severity"
-          }
-        ]
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.1.3",
       "targets": [
@@ -1097,81 +932,15 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "ALERTS{alertstate=\"firing\"} and on(node) (count by (node) (slurm_job_memory_usage{slurmjobid=\"$job_id\"}) > 0)",
-          "format": "table",
+          "expr": "(sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[7d])) / 3.6e9) / (sum(increase(slurm_job_gpu_seconds_total[7d])) / 3600)",
           "instant": true,
-          "legendFormat": "__auto",
+          "legendFormat": "kWh / GPU-hour",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Firing alerts on this job's nodes",
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "alertstate": true,
-              "job": true
-            },
-            "includeByName": {},
-            "indexByName": {
-              "Value": 6,
-              "action": 2,
-              "alertname": 0,
-              "gpu": 5,
-              "instance": 4,
-              "node": 3,
-              "severity": 1
-            },
-            "renameByName": {}
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "${logs_datasource}"
-      },
-      "description": "Requires the opt-in job log pipeline: VictoriaLogs (compose profile `logs` / `victorialogs.enabled`) plus the EpilogSlurmctld hook monitoring/slurm/epilog-logpush.sh on the Slurm controller. Output is pushed once when the job ends \u2014 nothing appears while the job is still running, nothing appears for jobs that finished before the pipeline was installed, and nothing appears at all when the pipeline is off. Only the last 10 MiB of stdout is shipped (ALGALON_LOG_MAX_BYTES). See docs/slurm.md.",
-      "gridPos": {
-        "h": 12,
-        "w": 24,
-        "x": 0,
-        "y": 38
-      },
-      "id": 11,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "${logs_datasource}"
-          },
-          "expr": "{slurmjobid=\"$job_id\"}",
-          "queryType": "instant",
-          "refId": "A"
-        }
-      ],
-      "title": "Job output (stdout)",
-      "type": "logs"
+      "title": "Energy per delivered GPU-hour (7d)",
+      "type": "stat"
     }
   ],
   "preload": false,
@@ -1195,55 +964,17 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
-      },
-      {
-        "current": {},
-        "hide": 0,
-        "includeAll": false,
-        "label": "Logs data source",
-        "multi": false,
-        "name": "logs_datasource",
-        "options": [],
-        "query": "victoriametrics-logs-datasource",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "type": "datasource"
-      },
-      {
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(slurm_job_memory_usage, slurmjobid)",
-        "hide": 0,
-        "includeAll": false,
-        "label": "Job ID",
-        "multi": false,
-        "name": "job_id",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(slurm_job_memory_usage, slurmjobid)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 2,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Algalon / Slurm Job Explorer",
-  "uid": "algalon-slurm-jobs",
+  "title": "Algalon / GPU Utilization Quality",
+  "uid": "algalon-gpu-quality",
   "version": 1,
   "weekStart": ""
 }
