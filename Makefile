@@ -84,4 +84,4 @@ release: ## Cut a release (usage: make release VERSION=0.5.0)
 		echo "usage: make release VERSION=X.Y.Z"; \
 		exit 1; \
 	fi
-	@bash scripts/release.sh $(VERSION)
+	@bash scripts/release.sh "$(VERSION)"

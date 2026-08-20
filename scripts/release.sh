@@ -21,6 +21,18 @@ die() {
 	exit 1
 }
 
+# Registered on EXIT right before the Chart.yaml bump so that any failure
+# after that point (gate failure, unexpected error, etc.) leaves the working
+# tree clean instead of stuck with a half-finished bump. Disarmed just
+# before the real commit, once the bump is meant to stick.
+restore_chart_on_failure() {
+	local exit_code=$?
+	if [ "$exit_code" -ne 0 ]; then
+		git checkout -- "$CHART_FILE" 2>/dev/null || true
+		echo "==> Failed (exit ${exit_code}); restored ${CHART_FILE} to its committed state." >&2
+	fi
+}
+
 [ "$#" -eq 1 ] || die "usage: scripts/release.sh X.Y.Z"
 VERSION="$1"
 
@@ -58,6 +70,8 @@ if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
 	die "tag '${TAG}' already exists on origin"
 fi
 
+trap restore_chart_on_failure EXIT
+
 echo "==> Bumping ${CHART_FILE} to ${VERSION}..."
 sed -i.bak \
 	-e "s/^version: .*/version: ${VERSION}/" \
@@ -76,6 +90,10 @@ if [ "$DRY_RUN" = "1" ]; then
 	echo "==> Dry run complete; no commit/tag/push performed."
 	exit 0
 fi
+
+# Gates passed and this is a real release: the bump is meant to stick, so
+# stop the failure-path restore from undoing it on a later, unrelated error.
+trap - EXIT
 
 echo "==> Committing chart bump..."
 git add "$CHART_FILE"
