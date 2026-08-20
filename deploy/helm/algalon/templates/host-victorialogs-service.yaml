@@ -1,0 +1,23 @@
+{{- if and .Values.host.enabled .Values.victorialogs.enabled }}
+{{/*
+Stable in-cluster endpoint. The DNS name <fullname>-victorialogs:9428 is a
+contract: the Grafana VictoriaLogs datasource points at it, and it is the
+VLOGS_URL the Slurm controller's epilog script pushes to (via whatever
+Ingress/NodePort the site exposes — the controller is outside the cluster).
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algalon.fullname" . }}-victorialogs
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "victorialogs") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9428
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victorialogs") | nindent 4 }}
+{{- end }}

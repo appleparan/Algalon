@@ -6,6 +6,10 @@ VictoriaMetrics Service, one file provider that picks up the dashboards
 ConfigMap. The datasource is `isDefault` because every dashboard binds its
 ${datasource} template variable to the default Prometheus datasource, and
 `editable: false` keeps the UI from drifting away from this chart.
+A second, never-default datasource is added when victorialogs.enabled —
+the Job Explorer's logs panel binds ${logs_datasource} to it. Unlike the
+compose stack (which provisions it unconditionally) the chart can gate it,
+so a cluster without the log store shows no dead datasource at all.
 */}}
 apiVersion: v1
 kind: ConfigMap
@@ -24,6 +28,14 @@ data:
         url: http://{{ include "algalon.fullname" . }}-victoriametrics:8428
         isDefault: true
         editable: false
+    {{- if .Values.victorialogs.enabled }}
+      - name: VictoriaLogs
+        type: victoriametrics-logs-datasource
+        access: proxy
+        url: http://{{ include "algalon.fullname" . }}-victorialogs:9428
+        isDefault: false
+        editable: false
+    {{- end }}
   dashboards.yml: |-
     apiVersion: 1
 

@@ -37,6 +37,10 @@ spec:
               value: {{ .Values.grafana.adminUser | quote }}
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: {{ .Values.grafana.adminPassword | quote }}
+            {{- with .Values.grafana.installPlugins }}
+            - name: GF_INSTALL_PLUGINS
+              value: {{ join "," . | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 3000

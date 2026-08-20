@@ -103,6 +103,22 @@ victoriametrics:
   resources:
     requests: {cpu: 500m, memory: 1Gi}
 
+# Optional job-log store. Off by default: it only earns its keep once the
+# Slurm controller runs monitoring/slurm/epilog-logpush.sh, which pushes a
+# job's stdout once at job end. Nothing tails the shared filesystem — a
+# directory watcher would generate the very NFS GETATTR load the
+# node-precursor rules watch for. See docs/slurm.md.
+victorialogs:
+  enabled: false
+  image: victoriametrics/victoria-logs:v1.51.1
+  # Same units as victoriametrics.retentionMonths: a bare number is months.
+  retentionMonths: 3
+  storage:
+    size: 20Gi
+    storageClassName: ""
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+
 vmagent:
   image: victoriametrics/vmagent:v1.149.0
   scrapeInterval: 30s
@@ -145,6 +161,14 @@ grafana:
   image: grafana/grafana:13.1.3
   adminUser: admin
   adminPassword: admin
+  # Rendered into GF_INSTALL_PLUGINS (comma-separated), same as the compose
+  # stack. Installed unconditionally so the Job Explorer's logs panel can
+  # render even before victorialogs.enabled is flipped on. Grafana downloads
+  # these on FIRST start, so the pod needs outbound internet once; set to []
+  # on an air-gapped cluster (or the pod will CrashLoop on the failed
+  # download) and bake the plugin into a derived image instead.
+  installPlugins:
+    - victoriametrics-logs-datasource 0.31.0
   resources:
     requests: {cpu: 100m, memory: 256Mi}
   # Site-supplied dashboards, same contract as vmalert.extraRules:

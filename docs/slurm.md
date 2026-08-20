@@ -308,6 +308,135 @@ If the join produces nothing, the `node` labels do not match. Compare
 `up{job="slurm-job"}` against `up{job="dcgm"}` — the label values must be
 identical strings, not merely the same machine.
 
+## Job logs (optional)
+
+Metrics tell you a job ran hot and then stopped. They do not tell you it
+died on a CUDA OOM in the third epoch. Algalon can keep the tail of each
+job's stdout next to its metrics, so the Job Explorer answers both
+questions in one place.
+
+This is a separate opt-in from the exporters above, with three moving
+parts:
+
+```text
+slurmctld  --EpilogSlurmctld-->  epilog-logpush.sh
+                                        |
+                                        | HTTP POST /insert/jsonline
+                                        v
+                                  VictoriaLogs  <---- Grafana logs panel
+```
+
+### Why a push at job end, and not a tailer
+
+The obvious design is a log agent that watches the output directories and
+follows files as they grow. On a GPU cluster that design is actively
+harmful: job outputs live on shared NFS, and a follower has to glob those
+trees and re-stat every candidate file on every poll. That is a
+continuous stream of NFS `GETATTR` operations against the same filer the
+training jobs are reading checkpoints from.
+
+Algalon's own `storage-nfs` and `node-precursor` rules alert on rising
+NFS `GETATTR` latency, because the Lablup report identifies it as an
+early indicator of checkpoint I/O trouble. A tailer would raise the exact
+metric its own alerts watch — the collector would poison the signal it
+was deployed to protect, and every operator would learn to ignore that
+alert.
+
+So nothing watches the filesystem. The log is read once, when the job is
+already over, and only its last 10 MiB are shipped.
+
+### Turning on the store
+
+VictoriaLogs is off by default in both deployment paths.
+
+Docker Compose — the `logs` profile:
+
+```bash
+cd deploy/compose/host
+docker compose --profile logs up -d
+```
+
+`VLOGS_PORT` (default `9428`) and `VLOGS_RETENTION_MONTHS` (default `3`,
+matching `VM_RETENTION_MONTHS`) are in `.env.example`.
+
+Helm:
+
+```bash
+helm upgrade --install algalon deploy/helm/algalon \
+  --set victorialogs.enabled=true
+```
+
+Two notes on Grafana. The VictoriaLogs datasource plugin is **always**
+installed (`GF_INSTALL_PLUGINS`), whether or not the store is enabled, so
+the panel below can render as soon as you flip the store on; Grafana
+downloads it on first start, which means that container needs outbound
+internet once — on an air-gapped host, set `grafana.installPlugins` to
+`[]` and bake the plugin into a derived image. And in the compose stack
+the datasource itself is provisioned unconditionally, so with the profile
+down you will see a `VictoriaLogs` datasource whose health check fails.
+That is expected; the Helm chart, which can gate on a value, only
+provisions it when `victorialogs.enabled`.
+
+### Installing the epilog hook
+
+Put `monitoring/slurm/epilog-logpush.sh` somewhere the slurmctld host can
+execute it, and register it as **`EpilogSlurmctld`** in `slurm.conf`:
+
+```conf
+EpilogSlurmctld=/etc/slurm/epilog-logpush.sh
+```
+
+`EpilogSlurmctld` — not `Epilog` — is the whole point. `Epilog` runs on
+every allocated node, so a 64-node job would push the same shared output
+file 64 times. `EpilogSlurmctld` runs **once per job, on the
+controller**, as `SlurmUser`. There is no dedup logic in the script
+because the hook makes dedup unnecessary.
+
+The trade is that the controller must be able to read the job's `StdOut`
+path, which on a typical cluster means it mounts the same shared
+filesystem the users write to. If it cannot, the script exits silently
+and you get no logs — not an error.
+
+Point it at the store, in `/etc/default/slurmctld` or the unit's
+`Environment=`:
+
+```bash
+VLOGS_URL=http://algalon-host.example.internal:9428
+ALGALON_LOG_MAX_BYTES=10485760   # 10 MiB of trailing output per job
+CURL_TIMEOUT=10
+```
+
+The script needs `curl` and `jq` on the controller alongside Slurm's own
+`scontrol`. `jq` is what turns arbitrary log bytes into valid JSON;
+hand-rolled escaping is a correctness trap and this script does not
+attempt it.
+
+**It cannot fail your jobs.** A non-zero `EpilogSlurmctld` makes
+slurmctld drain nodes, so every path in the script — missing `jq`, an
+unreadable output file, a VictoriaLogs that is down — ends in `exit 0`
+with a line on stderr for the slurmctld log. That property matters more
+than any log ever delivered, so treat it as load-bearing if you edit the
+script.
+
+### What you see
+
+The **Algalon / Slurm Job Explorer** dashboard gains a full-width **Job
+output (stdout)** panel at the bottom, bound to the `logs_datasource`
+variable and querying the LogsQL stream filter:
+
+```logsql
+{slurmjobid="$job_id"}
+```
+
+`slurmjobid` and `user` are the ingest-time stream fields, which is what
+makes that filter a stream lookup rather than a full scan. Each line also
+carries `jobname`, `exitcode` and `nodelist` as ordinary fields, so
+`{slurmjobid="123"} | exitcode:!="0:0"` and friends work in Explore.
+
+The panel is empty — not broken — in three ordinary cases: the job is
+still running (output is pushed at the end, not live), the job finished
+before you installed the hook, or the store is off.
+
 ## See also
 
 - [Architecture](architecture.md) — the pipeline these targets feed

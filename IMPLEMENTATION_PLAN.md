@@ -10,7 +10,7 @@ Explorer (+logs) → L3 Node Health/Checkpoint IO.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1. SLO recording rules (`algalon:sli:*`, group `slo`) + tests + `slo-overview.json` (uid `algalon-slo`) + docs | existing metrics only | ✅ done (`feat/slo-overview`, issue #15) |
-| 2. VictoriaLogs + Slurm epilog log push + Job Explorer logs panel | new components; epilog chosen over tailing to avoid NFS scan load (outputs live on shared NFS) | ⬜ planned |
+| 2. VictoriaLogs + Slurm epilog log push + Job Explorer logs panel | new components; epilog chosen over tailing to avoid NFS scan load (outputs live on shared NFS) | ✅ done (`feat/job-logs`, issue #17) |
 | 3. sacct textfile collector → exact job success ratio + queue-wait SLI + multiwindow burn-rate alerts | needs slurmctld-side script via `nodeExporter.textfileDirectory` | ⬜ planned |
 <!-- markdownlint-enable MD013 -->
 

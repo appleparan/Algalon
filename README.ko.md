@@ -85,7 +85,7 @@ save/load 구간 임계값, NFS 큐 대기 시간 분석이 모두 alert rule과
 | [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 일곱 개 rule 그룹, 알림 정책, 여덟 개 대시보드 |
 | [배포](docs/ko/deployment.md) | 배포 방식 선택, k3s와 Docker 공존, 시크릿 관리 |
 | [개발](docs/ko/development.md) | 검증 타깃, rule 유닛 테스트, k3d 엔드투엔드 스모크 테스트 |
-| [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인 |
+| [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인, 선택적인 잡 로그 파이프라인 |
 
 English documentation is in [`docs/`](docs/).
 

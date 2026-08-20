@@ -16,6 +16,27 @@ services:
     networks:
       - monitoring
 
+  # Optional job-log store (opt-in profile, pinned tag — never latest).
+  # Fed by monitoring/slurm/epilog-logpush.sh, which pushes a job's stdout
+  # ONCE at job end from the Slurm controller's EpilogSlurmctld. Nothing
+  # tails the shared filesystem: a directory watcher would generate the very
+  # NFS GETATTR load the node-precursor rules watch for.
+  #   docker compose --profile logs up -d
+  victorialogs:
+    profiles: ["logs"]
+    image: victoriametrics/victoria-logs:v1.51.1
+    container_name: algalon-victorialogs
+    restart: unless-stopped
+    ports:
+      - "${VLOGS_PORT:-9428}:9428"
+    volumes:
+      - vlogsdata:/storage
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=${VLOGS_RETENTION_MONTHS:-3}'
+    networks:
+      - monitoring
+
   # Scrapes workers listed in ./targets/*.yml (copy from
   # monitoring/scrape/targets/*.yml.example) and writes to VictoriaMetrics.
   vmagent:
@@ -78,6 +99,12 @@ services:
   # Datasource + dashboard providers come from ./grafana/provisioning; the
   # dashboard JSON itself is bind-mounted from monitoring/dashboards/ so the
   # repo stays the single source of truth (see the algalon file provider).
+  # GF_INSTALL_PLUGINS is unconditional: the Job Explorer's logs panel needs
+  # the plugin present even when the `logs` profile is down (the panel then
+  # simply returns nothing). Grafana downloads it on FIRST start only, so
+  # the container needs outbound internet once — on an air-gapped host,
+  # bake the plugin into a derived image or mount it into grafanadata
+  # instead.
   grafana:
     image: grafana/grafana:13.1.3
     container_name: algalon-grafana
@@ -87,6 +114,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource 0.31.0
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ../../../monitoring/dashboards:/var/lib/grafana/dashboards/algalon:ro
@@ -96,6 +124,7 @@ services:
 
 volumes:
   vmdata:
+  vlogsdata:
   amdata:
   grafanadata:
 

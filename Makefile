@@ -40,6 +40,7 @@ compose-validate: ## Validate compose stacks
 	@docker compose -f deploy/compose/worker/docker-compose.yml config -q
 	@docker compose -f deploy/compose/worker/docker-compose.yml --profile all-smi config -q
 	@docker compose -f deploy/compose/host/docker-compose.yml config -q
+	@docker compose -f deploy/compose/host/docker-compose.yml --profile logs config -q
 	@echo "✅ compose stacks valid"
 
 dashboards-validate: ## Validate Grafana dashboard JSON conventions
@@ -48,7 +49,7 @@ dashboards-validate: ## Validate Grafana dashboard JSON conventions
 		jq -e '.tags | index("algalon")' "$$f" >/dev/null || { echo "$$f: missing algalon tag"; exit 1; }; \
 		jq -e '.refresh == "30s"' "$$f" >/dev/null || { echo "$$f: refresh != 30s"; exit 1; }; \
 		jq -e '.templating.list | map(select(.type == "datasource")) | length >= 1' "$$f" >/dev/null || { echo "$$f: no datasource variable"; exit 1; }; \
-		jq -e '[.panels[] | select(.targets) | .targets[] | .datasource.uid] | all(. == "$${datasource}")' "$$f" >/dev/null || { echo "$$f: panel target not using \$${datasource}"; exit 1; }; \
+		jq -e '["$${datasource}", "$${logs_datasource}"] as $$ok | [.panels[] | select(.targets) | .targets[] | .datasource.uid] | all(IN($$ok[]))' "$$f" >/dev/null || { echo "$$f: panel target not using \$${datasource} or \$${logs_datasource}"; exit 1; }; \
 		jq -e '[.uid] as $$u | true' "$$f" >/dev/null; \
 	done; \
 	uids=$$(jq -r '.uid' monitoring/dashboards/*.json | sort | uniq -d); \
@@ -64,6 +65,7 @@ helm-sync: ## Sync monitoring/ content into the Helm chart files/ dir (generated
 # the render rather than shipping a broken notifier — so validation supplies
 # throwaway URLs. Never point these at a real workspace.
 HELM_VALIDATE_SET := --set allSmi.enabled=true \
+	--set victorialogs.enabled=true \
 	--set alertmanager.slack.criticalUrl=https://hooks.example/x \
 	--set alertmanager.slack.warningUrl=https://hooks.example/y
 

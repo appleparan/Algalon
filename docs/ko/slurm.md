@@ -301,6 +301,128 @@ Explorer는 DCGM 사용률, NFS GETATTR 지연, 그리고 잡의 노드에서 �
 `up{job="slurm-job"}`과 `up{job="dcgm"}`을 비교해 보세요. 같은 머신인 것으로
 충분하지 않고, 문자열이 완전히 같아야 합니다.
 
+## 잡 로그 (선택)
+
+메트릭은 잡이 뜨겁게 돌다가 멈췄다는 것까지만 알려 줍니다. 세 번째 epoch에서
+CUDA OOM으로 죽었다는 사실은 알려 주지 않습니다. Algalon은 각 잡의 stdout
+끝부분을 메트릭 옆에 함께 보관할 수 있고, 그러면 Job Explorer 한 화면에서 두
+질문에 모두 답할 수 있습니다.
+
+위의 exporter들과는 별개의 opt-in이며, 움직이는 부품은 세 개입니다.
+
+```text
+slurmctld  --EpilogSlurmctld-->  epilog-logpush.sh
+                                        |
+                                        | HTTP POST /insert/jsonline
+                                        v
+                                  VictoriaLogs  <---- Grafana 로그 패널
+```
+
+### 왜 tailer가 아니라 잡 종료 시점의 push인가
+
+흔한 설계는 출력 디렉터리를 감시하다가 파일이 자라는 대로 따라 읽는 로그
+에이전트입니다. GPU 클러스터에서 그 설계는 오히려 해롭습니다. 잡 출력은 공유
+NFS 위에 있고, follower는 폴링할 때마다 그 트리를 glob하고 후보 파일마다 다시
+stat해야 합니다. 학습 잡이 체크포인트를 읽고 있는 바로 그 파일러를 향해 NFS
+`GETATTR` 연산을 끊임없이 흘려보내는 셈입니다.
+
+Algalon의 `storage-nfs`와 `node-precursor` rule은 바로 그 NFS `GETATTR` 지연
+상승에 알림을 겁니다. Lablup 리포트가 이를 체크포인트 I/O 문제의 조기 지표로
+지목하기 때문입니다. tailer를 두면 자기 알림이 감시하는 그 메트릭을 자기가
+끌어올리게 됩니다. 지키려고 배포한 신호를 수집기가 오염시키는 것이고, 결국
+운영자는 그 알림을 무시하는 법을 배우게 됩니다.
+
+그래서 파일시스템을 감시하는 것은 아무것도 없습니다. 로그는 잡이 이미 끝난
+뒤에 한 번만 읽고, 마지막 10 MiB만 전송합니다.
+
+### 저장소 켜기
+
+VictoriaLogs는 두 배포 경로 모두에서 기본 비활성입니다.
+
+Docker Compose — `logs` 프로파일:
+
+```bash
+cd deploy/compose/host
+docker compose --profile logs up -d
+```
+
+`VLOGS_PORT`(기본 `9428`)와 `VLOGS_RETENTION_MONTHS`(기본 `3`,
+`VM_RETENTION_MONTHS`와 동일)는 `.env.example`에 있습니다.
+
+Helm:
+
+```bash
+helm upgrade --install algalon deploy/helm/algalon \
+  --set victorialogs.enabled=true
+```
+
+Grafana에 관해 두 가지. VictoriaLogs 데이터소스 플러그인은 저장소를 켰든
+껐든 **항상** 설치됩니다(`GF_INSTALL_PLUGINS`). 저장소를 켜는 즉시 아래 패널이
+그려지게 하기 위해서입니다. Grafana는 첫 기동 때 이 플러그인을 내려받으므로 그
+컨테이너에 한 번은 외부 인터넷이 필요합니다. 폐쇄망 호스트라면
+`grafana.installPlugins`를 `[]`로 두고 플러그인을 구운 파생 이미지를 쓰세요.
+그리고 compose 스택에서는 데이터소스 자체가 조건 없이 프로비저닝되므로,
+프로파일을 내려 둔 상태에서는 헬스 체크에 실패하는 `VictoriaLogs`
+데이터소스가 보입니다. 정상입니다. 값으로 분기할 수 있는 Helm 차트는
+`victorialogs.enabled`일 때만 프로비저닝합니다.
+
+### epilog 훅 설치하기
+
+`monitoring/slurm/epilog-logpush.sh`를 slurmctld 호스트가 실행할 수 있는
+위치에 두고, `slurm.conf`에 **`EpilogSlurmctld`**로 등록합니다.
+
+```conf
+EpilogSlurmctld=/etc/slurm/epilog-logpush.sh
+```
+
+`Epilog`가 아니라 `EpilogSlurmctld`라는 점이 핵심입니다. `Epilog`는 할당된
+모든 노드에서 실행되므로 64노드 잡이라면 같은 공유 출력 파일을 64번 밀어
+올리게 됩니다. `EpilogSlurmctld`는 **잡당 한 번, 컨트롤러에서** `SlurmUser`
+권한으로 실행됩니다. 스크립트에 중복 제거 로직이 없는 이유는 훅 선택만으로
+중복 제거가 불필요해지기 때문입니다.
+
+대신 컨트롤러가 잡의 `StdOut` 경로를 읽을 수 있어야 합니다. 보통은 사용자가
+쓰는 것과 같은 공유 파일시스템을 컨트롤러도 마운트해야 한다는 뜻입니다. 읽을
+수 없으면 스크립트는 조용히 종료하고 로그도 남지 않습니다. 에러가 아닙니다.
+
+저장소 주소는 `/etc/default/slurmctld`나 유닛의 `Environment=`로 넘깁니다.
+
+```bash
+VLOGS_URL=http://algalon-host.example.internal:9428
+ALGALON_LOG_MAX_BYTES=10485760   # 잡당 출력 끝부분 10 MiB
+CURL_TIMEOUT=10
+```
+
+스크립트는 Slurm의 `scontrol` 외에 컨트롤러의 `curl`과 `jq`를 씁니다. 임의의
+로그 바이트를 올바른 JSON으로 바꾸는 일을 `jq`가 맡습니다. 직접 짠 이스케이프는
+정확성 함정이고, 이 스크립트는 그 길을 택하지 않습니다.
+
+**이 스크립트는 잡을 실패시킬 수 없습니다.** `EpilogSlurmctld`가 0이 아닌 값을
+반환하면 slurmctld가 노드를 drain합니다. 그래서 `jq`가 없든, 출력 파일을 읽을
+수 없든, VictoriaLogs가 죽어 있든 스크립트의 모든 경로는 stderr(slurmctld
+로그)에 한 줄을 남기고 `exit 0`으로 끝납니다. 이 성질은 전달되는 어떤 로그보다
+중요하므로, 스크립트를 고칠 일이 있다면 반드시 유지해야 하는 제약으로
+취급하세요.
+
+### 무엇이 보이나
+
+**Algalon / Slurm Job Explorer** 대시보드 맨 아래에 전체 너비 **Job output
+(stdout)** 패널이 추가됩니다. `logs_datasource` 변수에 바인딩되며 다음 LogsQL
+스트림 필터로 질의합니다.
+
+```logsql
+{slurmjobid="$job_id"}
+```
+
+`slurmjobid`와 `user`는 ingest 시점의 스트림 필드이고, 그래서 이 필터가 전체
+스캔이 아니라 스트림 조회가 됩니다. 각 줄에는 `jobname`, `exitcode`,
+`nodelist`도 일반 필드로 함께 실리므로 Explore에서
+`{slurmjobid="123"} | exitcode:!="0:0"` 같은 질의도 그대로 동작합니다.
+
+다음 세 가지 평범한 상황에서 패널은 고장 난 것이 아니라 비어 있습니다. 잡이
+아직 실행 중일 때(출력은 실시간이 아니라 종료 시점에 전송됩니다), 훅을 설치하기
+전에 끝난 잡일 때, 그리고 저장소가 꺼져 있을 때입니다.
+
 ## 함께 보기
 
 - [아키텍처](architecture.md) — 이 타깃들이 흘러드는 파이프라인

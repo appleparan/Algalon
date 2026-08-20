@@ -1,0 +1,61 @@
+{{- if and .Values.host.enabled .Values.victorialogs.enabled }}
+{{/*
+Single-replica job-log store. StatefulSet rather than Deployment for the
+same reason as VictoriaMetrics: the PVC follows the pod identity, and
+retention is expressed in months (a bare -retentionPeriod value is counted
+in months by VictoriaLogs too).
+Ingestion is push-only, from the Slurm controller's EpilogSlurmctld hook —
+there is no scrape target and no tailer here by design.
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "algalon.fullname" . }}-victorialogs
+  labels:
+    {{- include "algalon.labels" (dict "ctx" $ "component" "victorialogs") | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ include "algalon.fullname" . }}-victorialogs
+  selector:
+    matchLabels:
+      {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victorialogs") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algalon.selectorLabels" (dict "ctx" $ "component" "victorialogs") | nindent 8 }}
+    spec:
+      containers:
+        - name: victorialogs
+          image: {{ .Values.victorialogs.image }}
+          args:
+            - "--storageDataPath=/storage"
+            - "--retentionPeriod={{ .Values.victorialogs.retentionMonths }}"
+          ports:
+            - name: http
+              containerPort: 9428
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9428
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+          {{- with .Values.victorialogs.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.victorialogs.storage.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.victorialogs.storage.size }}
+{{- end }}
