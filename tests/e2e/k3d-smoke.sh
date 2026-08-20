@@ -269,9 +269,14 @@ main() {
   make helm-sync
 
   log "Installing chart as release ${RELEASE}"
+  # installPlugins=null: --wait blocks on the Grafana pod, and GF_INSTALL_PLUGINS
+  # makes its first start download from grafana.com. Nothing asserted here needs
+  # the logs datasource plugin, so drop it rather than make the smoke test
+  # depend on that host being reachable.
   helm install "$RELEASE" "$CHART" \
     --set "alertmanager.slack.criticalUrl=${SLACK_CRITICAL_URL}" \
     --set "alertmanager.slack.warningUrl=${SLACK_WARNING_URL}" \
+    --set 'grafana.installPlugins=null' \
     --wait --timeout "$HELM_TIMEOUT"
 
   log 'Running assertions'
