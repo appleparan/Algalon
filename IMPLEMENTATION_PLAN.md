@@ -1,5 +1,27 @@
 # Alert Center Redesign — Status
 
+## SLO / Golden-Signals Redesign (2026-08)
+
+Symptom-first dashboard layer per Google SRE golden signals
+(issue #15). Layering: L0 SLO Overview → L1 Fleet/Queue → L2 Job
+Explorer (+logs) → L3 Node Health/Checkpoint IO.
+
+<!-- markdownlint-disable MD013 -->
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 1. SLO recording rules (`algalon:sli:*`, group `slo`) + tests + `slo-overview.json` (uid `algalon-slo`) + docs | existing metrics only | ✅ done (`feat/slo-overview`, issue #15) |
+| 2. VictoriaLogs + Slurm epilog log push + Job Explorer logs panel | new components; epilog chosen over tailing to avoid NFS scan load (outputs live on shared NFS) | ⬜ planned |
+| 3. sacct textfile collector → exact job success ratio + queue-wait SLI + multiwindow burn-rate alerts | needs slurmctld-side script via `nodeExporter.textfileDirectory` | ⬜ planned |
+<!-- markdownlint-enable MD013 -->
+
+Phase 1 SLIs (instantaneous 0-1 ratios; 30d compliance computed in the
+dashboard via `avg_over_time`): `exporter_availability` (avg(up)),
+`slurm_node_availability` (1 - (down+drain)/total),
+`gpu_health` (not HW-throttled ∧ temp < 92C),
+`nfs_latency_ok` (active (instance,operation) paths < 100ms/op; idle ⇒ 1),
+`job_failures_1h` (delta approximation — exact ratio deferred to Phase 3).
+SLO targets live in the dashboard (thresholds), not in rules.
+
 - **Spec**: `docs/superpowers/specs/2026-08-07-alert-center-design.md` (approved)
 - **Branches**: `feat/alert-center-*` (one per phase, PRs #1-#5)
 

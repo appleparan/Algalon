@@ -8,10 +8,10 @@ Algalon watches large GPU training clusters and tells operators not just
 *that* something broke, but *which recovery action the failure actually
 requires* — restart the job, reset the GPU, or reboot the node. It
 collects DCGM, OS and (optionally) cross-platform hardware metrics from
-every GPU node, stores them in VictoriaMetrics, evaluates six curated
-alert rule groups with vmalert, routes the results through Alertmanager
-to Slack, and renders the whole picture in five Grafana dashboards.
-Optional [Slurm integration](docs/slurm.md) adds a seventh rule group and
+every GPU node, stores them in VictoriaMetrics, evaluates seven curated
+rule groups with vmalert, routes the results through Alertmanager
+to Slack, and renders the whole picture in six Grafana dashboards.
+Optional [Slurm integration](docs/slurm.md) adds an eighth rule group and
 two more dashboards covering scheduler queue state and per-job accounting,
 so an idle GPU can be named with the job and the user holding it.
 
@@ -85,7 +85,7 @@ explains how the k3s path coexists with the host's training workloads
 
 | Document | Contents |
 | --- | --- |
-| [Architecture](docs/architecture.md) | Component pipeline, the six rule groups, the alerting policy, the five dashboards |
+| [Architecture](docs/architecture.md) | Component pipeline, the seven rule groups, the alerting policy, the eight dashboards |
 | [Deployment](docs/deployment.md) | Choosing a path, k3s + Docker coexistence, secrets handling |
 | [Development](docs/development.md) | Validation targets, rule unit tests, the k3d end-to-end smoke test |
 | [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join |

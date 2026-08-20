@@ -7,7 +7,7 @@
 # asserts the four properties that distinguish "the manifests render" (already
 # covered by `make helm-validate`) from "the pipeline runs":
 #
-#   1. vmalert loaded all six rule groups
+#   1. vmalert loaded all seven rule groups
 #   2. the Watchdog alert reached Alertmanager  (vmalert -> AM link is live)
 #   3. up{job="node"} == 1                      (vmagent -> VM scrape is live)
 #   4. the dcgm DaemonSet schedules nothing     (nodeSelector keeps GPU-only
@@ -110,7 +110,7 @@ run_in_cluster() {
 assert_rule_groups() {
   local script detail
   script=$(with_retry "$(cat <<'SH'
-groups='gpu-xid gpu-ecc gpu-health node-precursor storage-nfs meta'
+groups='gpu-xid gpu-ecc gpu-health node-precursor storage-nfs meta slo'
 while :; do
   body=$(curl -sf --max-time 10 "http://algalon-vmalert:8880/api/v1/rules" || true)
   found=0
@@ -123,12 +123,12 @@ while :; do
     fi
   done
   # Counting (not just "nothing missing") so an empty group list cannot pass.
-  if [ "$found" -eq 6 ]; then
-    printf 'all 6 rule groups loaded\n'
+  if [ "$found" -eq 7 ]; then
+    printf 'all 7 rule groups loaded\n'
     exit 0
   fi
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    printf 'only %s/6 groups loaded, missing:%s\n' "$found" "${missing:- <none>}"
+    printf 'only %s/7 groups loaded, missing:%s\n' "$found" "${missing:- <none>}"
     exit 1
   fi
   sleep "$interval"

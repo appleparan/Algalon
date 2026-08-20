@@ -38,7 +38,7 @@ never fail is worse than no test.
 ## End-to-end smoke test
 
 `make e2e-k3d` brings the entire pipeline up in a disposable k3d
-cluster and asserts four things: the six core rule groups are loaded in
+cluster and asserts four things: the seven core rule groups are loaded in
 vmalert, the Watchdog alert reaches Alertmanager (proving the alerting
 path end to end), node scraping through Kubernetes service discovery
 works, and the GPU-only DaemonSets stay correctly unscheduled on a
