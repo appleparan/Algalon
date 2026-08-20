@@ -25,6 +25,19 @@
 #     SLI — it *is* something partition and QOS limits control — but it
 #     drives dashboards and policy reviews, never a notification.
 #
+#     The refinement worth stating precisely, because it is easy to read
+#     the paragraph above as "job failures are never actionable": what
+#     is not pageable is the failure *total*. The failure *distribution*
+#     is, because user error has a shape and infrastructure failure has
+#     a different one. Mistakes land on whichever node the scheduler
+#     picked and stay inside one account; a node hoarding failures, or
+#     failures appearing across several accounts at once, is something
+#     no single user can arrange. Those two shapes page as warnings from
+#     slurm.yml (SlurmNodeFailJobs, SlurmNodeFailureConcentration,
+#     SlurmFailureSpreadAcrossAccounts), all of them reading the sacct
+#     collector's counters and all silent without it. Counts measure
+#     users; distribution measures the cluster.
+#
 # Slurm-derived SLIs (node availability, job failures) intentionally
 # produce *no series* when the optional Slurm exporters are not deployed:
 # an absent SLI reads as "not measured" on the dashboard, whereas a

@@ -189,3 +189,161 @@ tests:
         groupname: slurm
         alertname: SlurmJobGpuIdle
         exp_alerts: []
+
+  # --- SlurmNodeFailJobs ------------------------------------------------
+  # Two jobs land in NODE_FAIL inside the 30m window. Slurm itself blamed
+  # the node, so there is no user-error reading of this state and any
+  # occurrence pages.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_jobs_completed_total{state="node_fail", partition="gpu", account="delta", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailJobs
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+            exp_annotations:
+              summary: '2 job(s) ended NODE_FAIL in the last 30m - Slurm blamed the node, not the job'
+
+  # Negative: the counter exists (collector installed) but has not moved
+  # in the window. A cluster with an old NODE_FAIL in its history is not
+  # a cluster with a NODE_FAIL now.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_jobs_completed_total{state="node_fail", partition="gpu", account="delta", instance="slurmctld.example:9100"}'
+        values: '2x120'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailJobs
+        exp_alerts: []
+
+  # --- SlurmNodeFailureConcentration ------------------------------------
+  # Three nodes have failure history (so the degenerate-cluster guard is
+  # satisfied), and every failure in the window lands on gpu01: 6 of 6.
+  # Above the absolute floor of 4 and well past the 50% share.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_node_failures_total{node="gpu01", instance="slurmctld.example:9100"}'
+        values: '0x60 6x60'
+      - series: 'slurm_job_node_failures_total{node="gpu02", instance="slurmctld.example:9100"}'
+        values: '1x120'
+      - series: 'slurm_job_node_failures_total{node="gpu03", instance="slurmctld.example:9100"}'
+        values: '1x120'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailureConcentration
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              node: gpu01
+              instance: slurmctld.example:9100
+            exp_annotations:
+              summary: 'gpu01 holds 6 of the last 30m job failures - more than half the cluster total'
+
+  # Boundary: gpu01 owns every failure in the window, but only 3 of them.
+  # Below the absolute floor, so ordinary attrition that happened to land
+  # on one node does not page.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_node_failures_total{node="gpu01", instance="slurmctld.example:9100"}'
+        values: '0x60 3x60'
+      - series: 'slurm_job_node_failures_total{node="gpu02", instance="slurmctld.example:9100"}'
+        values: '1x120'
+      - series: 'slurm_job_node_failures_total{node="gpu03", instance="slurmctld.example:9100"}'
+        values: '1x120'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailureConcentration
+        exp_alerts: []
+
+  # Negative: plenty of failures on gpu01 (5, over the floor) but they are
+  # spread across the fleet - 5 of 12 is not a majority. Diffuse failure
+  # is what user error looks like, and this rule must ignore it.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_node_failures_total{node="gpu01", instance="slurmctld.example:9100"}'
+        values: '0x60 5x60'
+      - series: 'slurm_job_node_failures_total{node="gpu02", instance="slurmctld.example:9100"}'
+        values: '0x60 5x60'
+      - series: 'slurm_job_node_failures_total{node="gpu03", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailureConcentration
+        exp_alerts: []
+
+  # Degenerate cluster: one node has ever failed a job, and it owns 100%
+  # of a large burst. "All failures are on the only node" is arithmetic,
+  # not evidence, so the count guard keeps this silent.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_job_node_failures_total{node="gpu01", instance="slurmctld.example:9100"}'
+        values: '0x60 9x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmNodeFailureConcentration
+        exp_alerts: []
+
+  # --- SlurmFailureSpreadAcrossAccounts ---------------------------------
+  # Three accounts failing at once, 7 jobs in total: no single user's
+  # mistake can produce this shape.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="alpha", instance="slurmctld.example:9100"}'
+        values: '0x60 3x60'
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="beta", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+      - series: 'slurm_jobs_completed_total{state="failed", partition="cpu", account="gamma", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmFailureSpreadAcrossAccounts
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+            exp_annotations:
+              summary: 'Job failures in the last 30m span 3 accounts - a cluster-side fault, not one user'
+
+  # Boundary on breadth: only two accounts, and a big pile of failures in
+  # one of them. That is exactly the one-bad-submission-script case the
+  # doctrine refuses to page on.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="alpha", instance="slurmctld.example:9100"}'
+        values: '0x60 9x60'
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="beta", instance="slurmctld.example:9100"}'
+        values: '0x60 1x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmFailureSpreadAcrossAccounts
+        exp_alerts: []
+
+  # Boundary on volume: three accounts, but 5 failures in total - not
+  # more than 5. A quiet afternoon in which three people each fluffed a
+  # job is not an incident.
+  - interval: 30s
+    input_series:
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="alpha", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+      - series: 'slurm_jobs_completed_total{state="failed", partition="gpu", account="beta", instance="slurmctld.example:9100"}'
+        values: '0x60 2x60'
+      - series: 'slurm_jobs_completed_total{state="failed", partition="cpu", account="gamma", instance="slurmctld.example:9100"}'
+        values: '0x60 1x60'
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: slurm
+        alertname: SlurmFailureSpreadAcrossAccounts
+        exp_alerts: []

@@ -103,3 +103,86 @@ groups:
           action: investigate
         annotations:
           summary: 'Job {{ $labels.slurmjobid }} (user {{ $labels.user }}) is holding GPUs on {{ $labels.node }} below 10% utilization for 30m'
+
+      # --- Failure distribution (needs the optional sacct collector) -----
+      #
+      # The three rules below read `monitoring/slurm/sacct-textfile.sh`.
+      # Without it the series are absent and nothing here can fire, which
+      # is the same opt-in contract the rest of this file follows.
+      #
+      # They exist because of a distinction the SLO layer makes
+      # explicitly (see the header of slo.yml): the *total* number of
+      # failed jobs is not pageable, because on a shared research cluster
+      # most FAILED jobs are user error and an operator cannot fix a typo
+      # in somebody's batch script. But user error has a shape — it is
+      # diffuse. It lands on whichever node the scheduler picked, and it
+      # belongs to one account at a time. Failures piling onto a single
+      # node, or spreading across many accounts at once, are shapes user
+      # error cannot produce. So Algalon pages on the shape and stays
+      # quiet about the total.
+
+      # Slurm's own verdict, and the least ambiguous signal in this file:
+      # NODE_FAIL means slurmctld decided the *node* killed the job. No
+      # user can cause that state, so there is no user-error explanation
+      # to weigh — any occurrence is worth a look. No `for:` hold; the
+      # 30m window is the smoothing, exactly like SlurmJobFailureSpike.
+      - alert: SlurmNodeFailJobs
+        expr: sum(increase(slurm_jobs_completed_total{state="node_fail"}[30m])) > 0
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: '{{ $value | printf "%.0f" }} job(s) ended NODE_FAIL in the last 30m - Slurm blamed the node, not the job'
+
+      # Concentration: one node holding the majority of recent job
+      # failures. Peer-relative in the same style as node-precursor.yml —
+      # the absolute count is meaningless without knowing what the rest
+      # of the fleet is doing, so the rule asks for both an absolute floor
+      # (>= 4 failures, above ordinary attrition) and a relative share
+      # (> half of every failure in the window).
+      #
+      # `and on() (count(...) >= 3)` is the degenerate-cluster guard,
+      # mirroring node-precursor's `count(up{job="node"} == 1) >= 3`:
+      # where only one or two nodes have ever failed a job, "most
+      # failures are on one node" is arithmetic, not evidence. It also
+      # means a genuinely tiny cluster never pages on this rule, which is
+      # the right answer — an operator there already knows which node it
+      # is.
+      #
+      # The alert carries `node`, so the Alertmanager inhibit rule
+      # (node-scoped critical suppresses same-node warnings) silences it
+      # automatically when a critical already names the cause on that
+      # node — a GpuXidFellOffBus is the explanation for the failures,
+      # not a second incident.
+      - alert: SlurmNodeFailureConcentration
+        expr: >-
+          (increase(slurm_job_node_failures_total[30m]) >= 4)
+          and
+          (
+            increase(slurm_job_node_failures_total[30m])
+              / scalar(sum(increase(slurm_job_node_failures_total[30m]))) > 0.5
+          )
+          and on() (count(slurm_job_node_failures_total) >= 3)
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: '{{ $labels.node }} holds {{ $value | printf "%.0f" }} of the last 30m job failures - more than half the cluster total'
+
+      # Breadth: failures hitting several accounts at once. One user's
+      # typo can never satisfy this condition — it is confined to that
+      # user's account by construction. A shared filesystem that went
+      # away, a sick slurmctld, an expired credential or a bad module
+      # update must. Both halves are required: three accounts failing one
+      # job each is a quiet afternoon, and six failures inside a single
+      # account is one bad submission script.
+      - alert: SlurmFailureSpreadAcrossAccounts
+        expr: >-
+          count(sum by (account) (increase(slurm_jobs_completed_total{state="failed"}[30m])) > 0) >= 3
+          and on()
+          sum(increase(slurm_jobs_completed_total{state="failed"}[30m])) > 5
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'Job failures in the last 30m span {{ $value | printf "%.0f" }} accounts - a cluster-side fault, not one user'
