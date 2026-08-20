@@ -19,10 +19,18 @@
 # consuming the GPU-hours. Deliberately NOT here: a job success-ratio SLO
 # with burn-rate alerting. On a shared research cluster most FAILED jobs
 # are user error — a typo in a batch script, an OOM from a batch size the
-# user picked, a bad module load. Paging on that ratio pages an operator
+# user picked, a bad module load. Paging on that *total* pages an operator
 # for somebody else's mistake, and an operator who cannot act on a page
-# learns to ignore it. Job outcomes are therefore counted and charted, and
-# nothing in monitoring/rules/ alerts on them.
+# learns to ignore it.
+#
+# The DISTRIBUTION of those failures is a different question, and it is
+# why this script also breaks the outcome counter down by account and
+# counts failures per node. User error is diffuse: it lands on whichever
+# node the scheduler picked, and it belongs to one account at a time.
+# Infrastructure failure is not. Failures concentrating on one node, or
+# suddenly spreading across many accounts at once, are shapes user error
+# cannot produce — so monitoring/rules/slurm.yml pages on the shape while
+# staying silent about the total.
 #
 # CONFIGURATION (environment, all optional):
 #   SACCT_STATE_DIR           state directory  (default /var/lib/algalon-sacct)
@@ -38,11 +46,14 @@
 # window. Deleting the state directory resets every counter to zero; that
 # is a normal counter reset and `increase()`/`rate()` handle it.
 #
-# CARDINALITY: the only labels are `partition` (a handful per cluster),
-# `account` (tens), and the histograms' own `le`. `user` is deliberately
-# NOT a label — user counts grow without bound and every one of them would
-# multiply three histograms. Per-user attribution belongs in a sacct query,
-# not in a time series database.
+# CARDINALITY: the labels are `partition` (a handful per cluster),
+# `account` (tens), `node` (cluster size, on the failure counter only), and
+# the histograms' own `le`. The widest family is the outcome counter at
+# states(8) x partitions(few) x accounts(tens) — bounded by the site's
+# account list, not by usage. `user` is deliberately NOT a label anywhere:
+# user counts grow without bound and every one of them would multiply
+# three histograms. Per-user attribution belongs in a sacct query, not in
+# a time series database.
 #
 # DEPENDENCIES: bash, awk, GNU date (`date -d`, `date -f`), and Slurm's
 # `sacct`. Missing dependencies are a hard failure, not a silent no-op.
@@ -139,6 +150,72 @@ function gpus(tres,   t, m) {
   return m + 0
 }
 
+# Split a nodelist on commas that are NOT inside brackets: "a[1,2],b3"
+# is two tokens, not three. Returns the token count, or -1 if the
+# brackets do not balance.
+function split_top(s, toks,   i, c, depth, cur, n) {
+  n = 0; cur = ""; depth = 0
+  for (i = 1; i <= length(s); i++) {
+    c = substr(s, i, 1)
+    if (c == "[") depth += 1
+    else if (c == "]") { depth -= 1; if (depth < 0) return -1 }
+    if (c == "," && depth == 0) { toks[++n] = cur; cur = "" }
+    else cur = cur c
+  }
+  if (depth != 0) return -1
+  if (cur != "") toks[++n] = cur
+  return n
+}
+
+# Expand one token ("gpu01", "gpu[01-04,07]") onto the end of `out`,
+# which already holds `n` names. Returns the new count, or -1 on anything
+# it does not recognise — a wrong guess here would invent node names, so
+# the parser refuses rather than approximates.
+function expand_tok(t, out, n,   pre, rest, body, post, items, ni, j, it, r, lo, hi, w, fmt, k) {
+  if (index(t, "[") == 0) {
+    if (t !~ /^[A-Za-z0-9._-]+$/) return -1
+    out[++n] = t
+    return n
+  }
+  pre = substr(t, 1, index(t, "[") - 1)
+  rest = substr(t, index(t, "[") + 1)
+  if (index(rest, "]") == 0) return -1
+  body = substr(rest, 1, index(rest, "]") - 1)
+  post = substr(rest, index(rest, "]") + 1)
+  # One bracket group per token is the only form Slurm emits; a second one
+  # would mean the top-level split was wrong.
+  if (index(post, "[") > 0 || index(post, "]") > 0) return -1
+  if (pre !~ /^[A-Za-z0-9._-]*$/ || post !~ /^[A-Za-z0-9._-]*$/) return -1
+  ni = split(body, items, ",")
+  for (j = 1; j <= ni; j++) {
+    it = items[j]
+    if (it ~ /^[0-9]+$/) { out[++n] = pre it post; continue }
+    if (it !~ /^[0-9]+-[0-9]+$/) return -1
+    split(it, r, "-")
+    lo = r[1]; hi = r[2]
+    if (hi + 0 < lo + 0) return -1
+    # A pathological range would blow up the series count; refuse it.
+    if ((hi + 0) - (lo + 0) > 10000) return -1
+    # Zero padding is part of the name: gpu[01-04] is gpu01, not gpu1.
+    # The width comes from the low bound, which is how Slurm writes it.
+    w = (substr(lo, 1, 1) == "0" && length(lo) > 1) ? length(lo) : 0
+    fmt = (w > 0) ? sprintf("%%0%dd", w) : "%d"
+    for (k = lo + 0; k <= hi + 0; k++) out[++n] = pre sprintf(fmt, k) post
+  }
+  return n
+}
+
+function expand_nodelist(s, out,   toks, nt, i, n) {
+  nt = split_top(s, toks)
+  if (nt < 1) return -1
+  n = 0
+  for (i = 1; i <= nt; i++) {
+    n = expand_tok(toks[i], out, n)
+    if (n < 0) return -1
+  }
+  return n
+}
+
 function normstate(s) {
   if (s == "COMPLETED")      return "completed"
   if (s == "FAILED")         return "failed"
@@ -191,7 +268,7 @@ FILENAME == TS_FILE {
   # Split the raw line, not the awk fields: State carries a space in
   # "CANCELLED by 1234", so the default field splitting is useless here.
   n = split($0, f, "|")
-  if (n < 10) { errors += 1; next }
+  if (n < 11) { errors += 1; next }
 
   jobid = f[1]
   if (jobid in SEEN) next
@@ -212,7 +289,29 @@ FILENAME == TS_FILE {
   part = (f[8] == "" ? "unknown" : f[8])
   acct = (f[9] == "" ? "unknown" : f[9])
 
-  V["jobs|" st "|" part] += 1
+  V["jobs|" st "|" part "|" acct] += 1
+
+  # Per-node failure attribution. Slurm's own NODE_FAIL verdict and a
+  # plain FAILED both land here: which of the two it was is already in
+  # the outcome counter, and what this counter adds is *where*. One
+  # increment per node the job held, so a 64-node job that died charges
+  # all 64 — the alert that reads this looks for concentration, and a
+  # node that only ever appears inside large allocations cannot
+  # concentrate by accident.
+  if (st == "failed" || st == "node_fail") {
+    nl = f[11]
+    if (nl != "" && nl != "None assigned" && nl != "(null)" && nl != "None") {
+      nn = expand_nodelist(nl, NODES)
+      if (nn < 0) {
+        # Never guess at a nodelist. The job still counts as an outcome
+        # above; only the node attribution is dropped.
+        errors += 1
+      } else {
+        for (ni = 1; ni <= nn; ni++) V["node_failures|" NODES[ni]] += 1
+      }
+      delete NODES
+    }
+  }
 
   # Start is "None" or "Unknown" for a job that never ran (cancelled or
   # held while pending). It is a real outcome and stays in the state
@@ -313,8 +412,9 @@ $1 == "errors" { errors = $2 + 0; next }
   V[$1] = $2 + 0
   n = split($1, k, "|")
   kind = k[1]
-  if (kind == "jobs" && n == 3) JOBS[k[2] "|" k[3]] = 1
+  if (kind == "jobs" && n == 4) JOBS[k[2] "|" k[3] "|" k[4]] = 1
   else if (kind == "gpu_seconds" && n == 3) GPUSEC[k[2] "|" k[3]] = 1
+  else if (kind == "node_failures" && n == 2) NODEFAIL[k[2]] = 1
   else if (n >= 2) {
     # Arrays of arrays are a gawk extension, so each histogram keeps its
     # own partition set rather than one nested map.
@@ -329,13 +429,21 @@ $1 == "errors" { errors = $2 + 0; next }
 END {
   n = sortkeys(JOBS, L)
   if (n > 0) {
-    print "# HELP slurm_jobs_completed_total Slurm jobs that reached a terminal state, by normalized state and partition."
+    print "# HELP slurm_jobs_completed_total Slurm jobs that reached a terminal state, by normalized state, partition and account."
     print "# TYPE slurm_jobs_completed_total counter"
     for (i = 1; i <= n; i++) {
       split(L[i], p, "|")
-      printf "slurm_jobs_completed_total{state=\"%s\",partition=\"%s\"} %.15g\n", \
-        esc(p[1]), esc(p[2]), V["jobs|" L[i]] + 0
+      printf "slurm_jobs_completed_total{state=\"%s\",partition=\"%s\",account=\"%s\"} %.15g\n", \
+        esc(p[1]), esc(p[2]), esc(p[3]), V["jobs|" L[i]] + 0
     }
+  }
+
+  n = sortkeys(NODEFAIL, L)
+  if (n > 0) {
+    print "# HELP slurm_job_node_failures_total Jobs that ended FAILED or NODE_FAIL, counted once per node the job held. Concentration on one node is an infrastructure symptom; a flat spread is ordinary user error."
+    print "# TYPE slurm_job_node_failures_total counter"
+    for (i = 1; i <= n; i++)
+      printf "slurm_job_node_failures_total{node=\"%s\"} %.15g\n", esc(L[i]), V["node_failures|" L[i]] + 0
   }
 
   hist("slurm_job_wait_seconds", "wait", \
@@ -410,7 +518,7 @@ main() {
   local sacct_out="$workdir/sacct"
   if ! sacct --allusers --allocations --noheader --parsable2 \
     --starttime "$start_str" --endtime "$end_str" \
-    --format=JobID,State,Submit,Start,End,Elapsed,Timelimit,Partition,Account,AllocTRES \
+    --format=JobID,State,Submit,Start,End,Elapsed,Timelimit,Partition,Account,AllocTRES,NodeList \
     >"$sacct_out"; then
     die "sacct failed for window $start_str..$end_str; state not advanced"
   fi
