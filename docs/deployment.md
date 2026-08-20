@@ -42,12 +42,18 @@ nothing grabs host ports 80/443.
 ```bash
 ./deploy/k3s/preflight.sh server      # read-only checks, PASS/WARN/FAIL
 ./deploy/k3s/install-server.sh        # k3s server, default addons disabled
-make helm-sync
-helm install algalon deploy/helm/algalon --namespace algalon \
+helm install algalon oci://ghcr.io/appleparan/charts/algalon \
+  --version <X.Y.Z> --namespace algalon \
   --create-namespace --set alertmanager.slack.existingSecret=algalon-slack
 K3S_URL=https://<server>:6443 K3S_TOKEN=<token> \
   ./deploy/k3s/install-agent.sh       # on every GPU node
 ```
+
+Released chart versions are published to `oci://ghcr.io/appleparan/charts/algalon`
+(and attached to each GitHub release as a `.tgz`) by the release workflow —
+no repo checkout is needed on the target host. To install from a source
+checkout instead, run `make helm-sync` first (the chart's `files/` content
+is generated), then point `helm install` at `deploy/helm/algalon`.
 
 Both installers refuse to run when k3s is already present; removal is a
 deliberate manual step documented in the
