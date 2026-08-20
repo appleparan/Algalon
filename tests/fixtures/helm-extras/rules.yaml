@@ -1,0 +1,5 @@
+groups:
+  - name: citest
+    rules:
+      - alert: CiTest
+        expr: vector(1)

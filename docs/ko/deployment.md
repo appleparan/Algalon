@@ -69,6 +69,12 @@ Slurm 컨트롤러 — 은 `dcgmExporter.staticTargets` /
 합니다. Helm은 차트 바깥의 파일을 읽을 수 없어서, 차트의 `files/`
 디렉터리를 `monitoring/`에서 생성하며 이 디렉터리는 git에서 제외됩니다.
 
+`monitoring/`이 제공하는 것 이상으로 alert rule, 대시보드, scrape 설정이
+필요한 사이트는 `vmalert.extraRules`, `grafana.extraDashboards`,
+`vmagent.extraScrapeConfigs` 값으로 주입할 수 있습니다. 자세한 내용은 차트
+README의 [Site extensions](../../deploy/helm/algalon/README.md#site-extensions)를
+참고하세요.
+
 ## Docker Compose
 
 스택은 두 개입니다. `deploy/compose/host`(저장, 알림, UI — 한 대의 머신)와

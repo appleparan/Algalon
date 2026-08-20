@@ -108,12 +108,25 @@ vmagent:
   scrapeInterval: 30s
   resources:
     requests: {cpu: 200m, memory: 256Mi}
+  # Site-supplied scrape_configs entries, appended verbatim to the
+  # generated prometheus.yml. Must be a YAML list fragment starting at
+  # "- job_name: ...". A malformed fragment fails vmagent config load —
+  # validation is the site's responsibility.
+  #   --set-file 'vmagent.extraScrapeConfigs=path/to/scrape.yaml'
+  extraScrapeConfigs: ""
 
 vmalert:
   image: victoriametrics/vmalert:v1.149.0
   evaluationInterval: 30s
   resources:
     requests: {cpu: 100m, memory: 128Mi}
+  # Site-supplied rule files, appended to the chart's own rule set.
+  # Map of <name> -> full vmalert rule-file content; each entry renders
+  # as ConfigMap key extra-<name>.yml so it cannot collide with chart
+  # files. Inject at install time, e.g.
+  #   --set-file 'vmalert.extraRules.h100-serving=path/to/rules.yaml'
+  # Validating injected rules is the site's responsibility.
+  extraRules: {}
 
 alertmanager:
   image: prom/alertmanager:v0.33.1
@@ -134,3 +147,7 @@ grafana:
   adminPassword: admin
   resources:
     requests: {cpu: 100m, memory: 256Mi}
+  # Site-supplied dashboards, same contract as vmalert.extraRules:
+  # <name> -> dashboard JSON string, rendered as extra-<name>.json.
+  #   --set-file 'grafana.extraDashboards.h100-serving=path/to/dash.json'
+  extraDashboards: {}

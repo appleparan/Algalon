@@ -89,4 +89,8 @@ data:
               node: {{ .node | quote }}
         {{- end }}
       {{- end }}
+      {{- with .Values.vmagent.extraScrapeConfigs }}
+      # Site-supplied scrape configs, appended verbatim.
+      {{- . | nindent 6 }}
+      {{- end }}
 {{- end }}
