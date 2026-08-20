@@ -11,9 +11,9 @@ GPU를 리셋할지, 노드를 리부팅할지 — 를 운영자에게 알려줍
 VictoriaMetrics에 저장하고, 엄선된 일곱 개의 rule 그룹을 vmalert로
 평가한 뒤 Alertmanager를 거쳐 Slack으로 라우팅하며, 전체 상황을 여섯 개의
 Grafana 대시보드로 보여줍니다. 선택 사항인
-[Slurm 연동](docs/ko/slurm.md)을 켜면 rule 그룹 하나와 대시보드 두 개가
-더해져 스케줄러 큐 상태와 잡 단위 어카운팅까지 다루므로, 놀고 있는 GPU를
-붙잡은 잡과 사용자를 짚어낼 수 있습니다. 역시 선택 사항인 잡 로그
+[Slurm 연동](docs/ko/slurm.md)을 켜면 rule 그룹 하나와 대시보드 세 개가
+더해져 스케줄러 큐 상태, 잡 단위 어카운팅, 스케줄러 정책 분석까지 다루므로,
+놀고 있는 GPU를 붙잡은 잡과 사용자를 짚어낼 수 있습니다. 역시 선택 사항인 잡 로그
 파이프라인을 켜면 Slurm epilog가 종료된 잡의 stdout을 VictoriaLogs로
 보내므로, Job Explorer에서 실패한 잡의 출력을 메트릭 바로 옆에서 볼 수
 있습니다.
@@ -85,10 +85,10 @@ save/load 구간 임계값, NFS 큐 대기 시간 분석이 모두 alert rule과
 
 | 문서 | 내용 |
 | --- | --- |
-| [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 일곱 개 rule 그룹, 알림 정책, 여덟 개 대시보드 |
+| [아키텍처](docs/ko/architecture.md) | 컴포넌트 파이프라인, 일곱 개 rule 그룹, 알림 정책, 아홉 개 대시보드 |
 | [배포](docs/ko/deployment.md) | 배포 방식 선택, k3s와 Docker 공존, 시크릿 관리 |
 | [개발](docs/ko/development.md) | 검증 타깃, rule 유닛 테스트, k3d 엔드투엔드 스모크 테스트 |
-| [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인, 선택적인 잡 로그 파이프라인 |
+| [Slurm 연동](docs/ko/slurm.md) | 두 개의 Slurm exporter, 타깃 등록, Slurm 알림과 대시보드, `on(node)` 조인, 선택적인 잡 로그 파이프라인, sacct 스케줄러 분석 collector |
 
 English documentation is in [`docs/`](docs/).
 

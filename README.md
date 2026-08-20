@@ -12,8 +12,9 @@ every GPU node, stores them in VictoriaMetrics, evaluates seven curated
 rule groups with vmalert, routes the results through Alertmanager
 to Slack, and renders the whole picture in six Grafana dashboards.
 Optional [Slurm integration](docs/slurm.md) adds an eighth rule group and
-two more dashboards covering scheduler queue state and per-job accounting,
-so an idle GPU can be named with the job and the user holding it. An
+three more dashboards covering scheduler queue state, per-job accounting
+and scheduler policy analytics, so an idle GPU can be named with the job
+and the user holding it. An
 optional job-log pipeline pairs those dashboards with logs: a Slurm
 epilog ships each finished job's stdout into VictoriaLogs, so the Job
 Explorer shows a failed job's output right next to its metrics.
@@ -88,10 +89,10 @@ explains how the k3s path coexists with the host's training workloads
 
 | Document | Contents |
 | --- | --- |
-| [Architecture](docs/architecture.md) | Component pipeline, the seven rule groups, the alerting policy, the eight dashboards |
+| [Architecture](docs/architecture.md) | Component pipeline, the seven rule groups, the alerting policy, the nine dashboards |
 | [Deployment](docs/deployment.md) | Choosing a path, k3s + Docker coexistence, secrets handling |
 | [Development](docs/development.md) | Validation targets, rule unit tests, the k3d end-to-end smoke test |
-| [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join, the optional job log pipeline |
+| [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join, the optional job log pipeline, the sacct scheduler-analytics collector |
 
 한국어 문서는 [`docs/ko/`](docs/ko/)에 있습니다.
 

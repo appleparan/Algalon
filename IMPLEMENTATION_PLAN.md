@@ -11,7 +11,7 @@ Explorer (+logs) → L3 Node Health/Checkpoint IO.
 | --- | --- | --- |
 | 1. SLO recording rules (`algalon:sli:*`, group `slo`) + tests + `slo-overview.json` (uid `algalon-slo`) + docs | existing metrics only | ✅ done (`feat/slo-overview`, issue #15) |
 | 2. VictoriaLogs + Slurm epilog log push + Job Explorer logs panel | new components; epilog chosen over tailing to avoid NFS scan load (outputs live on shared NFS) | ✅ done (`feat/job-logs`, issue #17) |
-| 3. sacct textfile collector → exact job success ratio + queue-wait SLI + multiwindow burn-rate alerts | needs slurmctld-side script via `nodeExporter.textfileDirectory` | ⬜ planned |
+| 3. sacct textfile collector → queue-wait SLI + Scheduler Analytics dashboard (`algalon-scheduler`) for QoS policy decisions | slurmctld-side script via `nodeExporter.textfileDirectory`; NO burn-rate paging on job success — most failures are user error (controller decision) | ✅ done (`feat/sacct-sli`, issue #20) |
 <!-- markdownlint-enable MD013 -->
 
 Phase 1 SLIs (instantaneous 0-1 ratios; 30d compliance computed in the
@@ -19,7 +19,10 @@ dashboard via `avg_over_time`): `exporter_availability` (avg(up)),
 `slurm_node_availability` (1 - (down+drain)/total),
 `gpu_health` (not HW-throttled ∧ temp < 92C),
 `nfs_latency_ok` (active (instance,operation) paths < 100ms/op; idle ⇒ 1),
-`job_failures_1h` (delta approximation — exact ratio deferred to Phase 3).
+`job_failures_1h` (delta approximation; the exact counter arrives with the
+Phase 3 collector but is deliberately charted, not paged on).
+Phase 3 adds `job_wait_ok_1h` (share of jobs started within the 30-minute
+budget; denominator guarded with `> 0` so an idle hour is absent, not NaN).
 SLO targets live in the dashboard (thresholds), not in rules.
 
 - **Spec**: `docs/superpowers/specs/2026-08-07-alert-center-design.md` (approved)

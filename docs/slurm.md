@@ -7,7 +7,7 @@ hardware view: which jobs are queued, which nodes the scheduler has
 given up on, and — per job — who owns it and whether the GPUs it holds
 are doing any work. The integration is entirely opt-in: it adds two
 scrape jobs, and with no targets registered it produces no series, no
-alerts and two empty dashboards.
+alerts and three empty dashboards.
 
 Nothing here is deployed by Algalon, except the optional in-cluster
 [jobExporter DaemonSet](#in-cluster-jobexporter-daemonset). Both exporters
@@ -251,7 +251,7 @@ nothing.
 
 ### Dashboards
 
-Two dashboards, auto-provisioned into the **Algalon** folder like the
+Three dashboards, auto-provisioned into the **Algalon** folder like the
 others:
 
 - **Algalon / Slurm Queue** (`algalon-slurm-queue`) — the scheduler
@@ -262,6 +262,11 @@ others:
   time, selected with the `job_id` variable: owner and account, cgroup
   memory, process count and GPU count; per-GPU utilization, memory and
   power; and the node-joined panels described below.
+- **Algalon / Scheduler Analytics** (`algalon-scheduler`) — a 7-day
+  policy view rather than an ops view, fed by the optional accounting
+  collector described in
+  [Scheduler analytics](#scheduler-analytics-optional). Only its
+  pending-versus-idle panel works without that collector.
 
 ### Metrics and labels
 
@@ -436,6 +441,253 @@ carries `jobname`, `exitcode` and `nodelist` as ordinary fields, so
 The panel is empty — not broken — in three ordinary cases: the job is
 still running (output is pushed at the end, not live), the job finished
 before you installed the hook, or the store is off.
+
+## Scheduler analytics (optional)
+
+The two exporters above answer *what is the scheduler doing right now*.
+Neither can tell you whether the partition layout is any good, because
+both publish gauges: an hour after the fact, a job that queued for six
+hours is indistinguishable from one that started immediately. Every
+question a policy review actually asks — should this partition's time
+limit go up, is anyone waiting too long, which account is consuming the
+fleet — needs per-job history, and that lives in Slurm's own accounting
+database.
+
+`monitoring/slurm/sacct-textfile.sh` reads it. The script runs on the
+controller from cron or a systemd timer, folds each window of finished
+jobs into cumulative counters, and writes them where node_exporter will
+publish them. Like the epilog hook, Algalon ships the script and the
+rules and dashboards that read it, but never deploys or schedules it.
+
+This is a third, separate opt-in. It needs neither exporter above,
+though the Scheduler Analytics dashboard is more useful with the queue
+exporter running alongside it.
+
+### Why a textfile collector and not another exporter
+
+`sacct` is a database query, not a cheap read. An exporter would put a
+synchronous slurmdbd round-trip inside every 30-second scrape, and the
+first time the accounting database got slow it would surface as an
+exporter outage rather than as what it is. A cron job writing a `.prom`
+file decouples the two: node_exporter serves the last good snapshot at
+memory speed, and a hung `sacct` delays data instead of breaking scrapes.
+
+It also means the collector holds its own state. The `.prom` file is a
+pure rendering of a state file the script owns, which is what keeps the
+counters monotonic across runs and across reboots — see
+[State, resets and restarts](#state-resets-and-restarts).
+
+### What it emits, and what each metric decides
+
+<!-- markdownlint-disable MD013 -->
+| Metric | Type | Labels | The decision it informs |
+| --- | --- | --- | --- |
+| `slurm_jobs_completed_total` | counter | `state`, `partition` | Where outcomes cluster. A `timeout` share that keeps climbing is a walltime limit set below what the work needs; `node_fail` concentrating in one partition points at hardware, not at users |
+| `slurm_job_wait_seconds` | histogram | `partition` | **Partition and QOS limits.** p50 tells you what a typical user experiences, p90 tells you who is being starved. A flat p50 under a climbing p90 means the limits, not the capacity, are the constraint |
+| `slurm_job_runtime_seconds` | histogram | `partition` | **Partition layout.** A partition whose p90 runtime is minutes does not need a multi-day maximum time; one whose p50 already sits near its limit will keep producing timeouts |
+| `slurm_job_timelimit_used_ratio` | histogram | `partition` | **Backfill efficiency.** `Elapsed / Timelimit`. Mass at the low end is padded walltime, and the scheduler cannot backfill a job into a gap it believes is too short — so over-requesting leaves nodes idle in front of a full queue. Mass above 1.0 is the jobs the limit killed |
+| `slurm_job_gpu_seconds_total` | counter | `partition`, `account` | **Fairshare.** Allocated GPU-seconds per account. An account far above its intended share is an argument for a fairshare or QOS change rather than for buying hardware |
+| `slurm_sacct_collector_last_run_timestamp_seconds` | gauge | — | Whether the timer is still running. Stale means the cron job died, not that the cluster went quiet |
+| `slurm_sacct_collector_errors_total` | counter | — | Rows the parser could not read. A rising value means `sacct` output drifted from what the script expects — see [What could still surprise you](#what-could-still-surprise-you) |
+<!-- markdownlint-enable MD013 -->
+
+`slurm_job_gpu_seconds_total` counts **allocated** GPU-seconds, not used
+ones: a job holding an idle GPU is counted in full. That is exactly why
+`SlurmJobGpuIdle` exists next to it — one metric says what was handed
+out, the other says whether it was put to work.
+
+The wait histogram also feeds one recording rule,
+`algalon:sli:job_wait_ok_1h` in
+[`monitoring/rules/slo.yml`](../monitoring/rules/slo.yml): the share of
+jobs that started within 30 minutes of submission. The 30-day version of
+that ratio is a stat tile on **SLO Overview**, recomputed there from the
+raw histogram rather than averaged from the hourly rule, so a busy
+afternoon weighs more than a quiet night. It has no alert — see
+[Why there is no job success SLO](#why-there-is-no-job-success-slo).
+
+### Installing it on the controller
+
+Put the script somewhere the controller can execute it, and give it a
+state directory:
+
+```bash
+install -m 0755 monitoring/slurm/sacct-textfile.sh \
+  /usr/local/bin/algalon-sacct-textfile
+install -d -m 0755 /var/lib/algalon-sacct
+install -d -m 0755 /var/lib/node_exporter/textfile
+```
+
+It reads three optional environment variables:
+
+```bash
+SACCT_STATE_DIR=/var/lib/algalon-sacct
+TEXTFILE_DIR=/var/lib/node_exporter/textfile
+ALGALON_SACCT_LOOKBACK_S=3600   # first run only; later runs resume
+```
+
+`ALGALON_SACCT_LOOKBACK_S` is used **only** when no state exists yet. Every
+later run resumes from the end of the previous window, so the schedule
+below and that value are independent — changing the cron period does not
+create a gap or a double count.
+
+Run it as a user `sacct` will answer for. The script passes `--allusers`,
+which needs the caller to be a Slurm operator or admin; without that
+privilege `sacct` silently reports only the caller's own jobs, and the
+collector would cheerfully publish near-zero counters.
+
+Cron, every five minutes. The two paths above are the script's own
+defaults, so nothing needs to be passed unless you moved them:
+
+```cron
+*/5 * * * * root /usr/local/bin/algalon-sacct-textfile
+```
+
+Or a systemd timer, which is easier to inspect when it misbehaves.
+`/etc/systemd/system/algalon-sacct.service`:
+
+```ini
+[Unit]
+Description=Algalon sacct textfile collector
+After=slurmdbd.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=SACCT_STATE_DIR=/var/lib/algalon-sacct
+Environment=TEXTFILE_DIR=/var/lib/node_exporter/textfile
+ExecStart=/usr/local/bin/algalon-sacct-textfile
+```
+
+`/etc/systemd/system/algalon-sacct.timer`:
+
+```ini
+[Unit]
+Description=Run the Algalon sacct textfile collector every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable --now algalon-sacct.timer
+```
+
+Unlike the epilog, this script **exits non-zero on failure** — a drained
+node is not at stake here, and a cron job that fails silently is a cron
+job nobody notices. `systemctl status algalon-sacct.service` or cron's
+mail will show what went wrong.
+
+### Publishing the file
+
+The `.prom` file is only useful if a node_exporter on the same host reads
+it. That means the controller needs its own node_exporter started with:
+
+```bash
+node_exporter --collector.textfile.directory=/var/lib/node_exporter/textfile
+```
+
+and a scrape target for it. In the Compose path, add the controller to
+`deploy/compose/host/targets/node-targets.yml` like any other machine.
+
+In the Helm path, where the controller is a cluster node running
+Algalon's own node-exporter DaemonSet, set the chart's
+`nodeExporter.textfileDirectory` to the host directory instead of running
+a second exporter:
+
+```yaml
+nodeExporter:
+  textfileDirectory: /var/lib/node_exporter/textfile
+```
+
+The DaemonSet then mounts that host path read-only at the same location
+and enables the textfile collector. It is empty by default, which is what
+keeps the collector off for everyone who has not opted in. Note that the
+value applies to *every* node the DaemonSet covers — nodes without a
+`.prom` file simply contribute nothing.
+
+If the controller is not a Kubernetes node, keep a host node_exporter
+there and list it under `nodeExporter.staticTargets` instead.
+
+### State, resets and restarts
+
+`$SACCT_STATE_DIR/state` holds the end of the last processed window plus
+every cumulative counter and bucket. Three consequences worth knowing:
+
+- **Counters survive reboots.** Nothing is recomputed from a time window,
+  so a controller restart does not reset a single counter — the next run
+  simply resumes from where the last one stopped.
+- **Deleting the state directory resets everything to zero.** That is a
+  normal counter reset, and `increase()` and `rate()` handle it: you lose
+  history, not correctness. Every query in the rules and dashboards is
+  written in those terms for exactly this reason.
+- **A failed run does not lose jobs.** The window end only advances after
+  every job in the window has been folded in, so an aborted run makes the
+  next one re-query the same jobs. Overlap is deduplicated by each job's
+  end time, so re-querying counts nothing twice.
+
+The `.prom` file is written to a temporary file and renamed, so
+node_exporter never reads a half-written exposition — it sees either the
+previous snapshot or the new one.
+
+### Cardinality
+
+The only labels are `partition` (a handful per cluster), `account` (tens)
+and the histograms' own `le`. That is a few hundred series at most, and
+it does not grow with cluster usage.
+
+`user` is deliberately **not** a label. User counts grow without bound,
+and every user would multiply three histograms — the one dimension that
+would turn this collector into a cardinality problem is the one it
+refuses to add. Per-user attribution is an `sacct` query, not a time
+series. (The per-job exporter does carry `user`, but only for jobs that
+are running right now, which is a bounded set.)
+
+### Why there is no job success SLO
+
+The obvious thing to build on top of `slurm_jobs_completed_total` is a
+success ratio with burn-rate alerts, and Algalon deliberately does not.
+
+On a shared research cluster most `FAILED` jobs are user error: a typo in
+a batch script, an OOM from a batch size the user chose, a bad module
+load. Paging an operator for that ratio pages them for a mistake they
+cannot fix, and an operator who cannot act on a page learns to ignore
+every page from the same source — including the ones that mean a node is
+on fire. The cost is not the wasted alert; it is the trust spent on it.
+
+So job outcomes are counted and charted, and nothing in
+`monitoring/rules/` alerts on them. Queue wait is different: it *is*
+something partition and QOS limits control, so it is recorded as an SLI —
+but it too drives dashboards and policy reviews, not notifications. The
+`slurm` rule group keeps its alerts on scheduler faults (`SlurmNodeDown`,
+`SlurmQueueStalledWithIdleNodes`), where the operator is the person who
+can act.
+
+### What could still surprise you
+
+- **Accounting lag.** The window ends at "now", so a job that finished
+  seconds ago and has not yet been committed to slurmdbd falls outside
+  both this window and the next. On a busy cluster this is a handful of
+  jobs per run; if it matters to you, widen the schedule rather than the
+  window.
+- **Typed GRES.** GPU counts come from the untyped `gres/gpu=N` token in
+  `AllocTRES`. Slurm emits it alongside typed entries
+  (`gres/gpu:a100=2`), so a typed request is still counted once — but a
+  site that has suppressed the untyped token will see zero GPU-seconds.
+- **Jobs that never started.** `CANCELLED` while pending gives a job no
+  start time. Those jobs are counted in `slurm_jobs_completed_total` and
+  excluded from all three histograms, because a zero wait for a job that
+  never ran would drag every quantile toward the floor.
+- **`UNLIMITED` and `Partition_Limit` walltimes** have no used-ratio and
+  are absent from `slurm_job_timelimit_used_ratio` entirely.
+- **Array and heterogeneous jobs** are counted per allocation
+  (`--allocations`), so a 1000-task array contributes 1000 rows, one per
+  task, and no separate row for the array as a whole.
 
 ## See also
 

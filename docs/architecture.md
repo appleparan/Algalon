@@ -24,13 +24,21 @@ to keep its exporters listening.
 | VictoriaLogs *(optional)* | Job stdout, pushed at job end by the epilog |
 | vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
-| Grafana | Eight auto-provisioned dashboards |
+| Grafana | Nine auto-provisioned dashboards |
 
 VictoriaLogs is the one component nothing scrapes: it is written to, by
 `monitoring/slurm/epilog-logpush.sh` running as `EpilogSlurmctld` on the
 Slurm controller. It is off in both deployment paths until you ask for it
 (compose profile `logs`, or `victorialogs.enabled` in the chart) — see
 [Job logs](slurm.md#job-logs-optional).
+
+Three optional Slurm-side pieces hang off the controller and the compute
+nodes, each a separate opt-in and none of them deployed by Algalon: the
+two exporters (`prometheus-slurm-exporter`, `slurm-job-exporter`), the
+epilog log push above, and `monitoring/slurm/sacct-textfile.sh` — a cron
+or timer job that turns Slurm accounting into a node_exporter textfile
+for the Scheduler Analytics dashboard. See
+[Slurm integration](slurm.md).
 
 `monitoring/` is the single source of truth for the rules, dashboards,
 scrape config, Alertmanager policy and the DCGM counter set. Docker
@@ -138,7 +146,7 @@ notifier.
 
 ## Dashboards
 
-Eight Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+Nine Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
 into the **Algalon** folder:
 
 - **SLO Overview** — the symptom-first entry point: 30-day compliance
@@ -160,3 +168,10 @@ into the **Algalon** folder:
 - **Slurm Queue / Slurm Job Explorer** — queue state and per-job
   accounting views; populated only with
   [Slurm integration](slurm.md).
+- **Scheduler Analytics** — a 7-day policy view over Slurm accounting:
+  queue-wait and runtime quantiles per partition, walltime accuracy,
+  job outcomes and GPU-hours per account. Populated by the optional
+  [sacct textfile collector](slurm.md#scheduler-analytics-optional).
+  Nothing on it pages: there is deliberately no job success-ratio SLO,
+  because most job failures are user error and burn-rate alerting on
+  them would page operators for mistakes they cannot fix.

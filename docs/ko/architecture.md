@@ -24,13 +24,20 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | VictoriaLogs *(선택)* | 잡 stdout. epilog가 잡 종료 시 한 번 push |
 | vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
-| Grafana | 자동 프로비저닝되는 여덟 개 대시보드 |
+| Grafana | 자동 프로비저닝되는 아홉 개 대시보드 |
 
 VictoriaLogs는 아무도 scrape하지 않는 유일한 구성 요소입니다. Slurm
 컨트롤러에서 `EpilogSlurmctld`로 도는 `monitoring/slurm/epilog-logpush.sh`가
 이 저장소에 씁니다. 두 배포 경로 모두에서 명시적으로 켜기 전까지는 꺼져
 있습니다(compose `logs` 프로파일, 또는 차트의 `victorialogs.enabled`).
 [잡 로그](slurm.md#잡-로그-선택)를 보세요.
+
+컨트롤러와 계산 노드 쪽에는 선택적인 Slurm 관련 구성 요소 세 가지가 붙습니다.
+각각이 별개의 opt-in이고 어느 것도 Algalon이 배포하지 않습니다. exporter 두
+개(`prometheus-slurm-exporter`, `slurm-job-exporter`), 위의 epilog 로그
+push, 그리고 `monitoring/slurm/sacct-textfile.sh` — Slurm accounting을
+node_exporter textfile로 바꿔 Scheduler Analytics 대시보드에 공급하는 cron
+또는 타이머 잡입니다. [Slurm 통합](slurm.md)을 보세요.
 
 rule, 대시보드, scrape 설정, Alertmanager 정책, DCGM 카운터 세트의 단일
 진실 공급원은 `monitoring/` 디렉터리입니다. Docker Compose는 이 디렉터리를
@@ -134,7 +141,7 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
 
 ## 대시보드
 
-`monitoring/dashboards/`의 Grafana 대시보드 여덟 개가 **Algalon** 폴더로
+`monitoring/dashboards/`의 Grafana 대시보드 아홉 개가 **Algalon** 폴더로
 자동 프로비저닝됩니다.
 
 - **SLO Overview** — 증상부터 보는 진입점. 각 SLI의 30일 준수율을 SLO
@@ -154,3 +161,11 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
   켰을 때만 데이터가 채워집니다.
 - **Slurm Queue / Slurm Job Explorer** — 큐 상태와 잡별 accounting 뷰.
   [Slurm 통합](slurm.md)을 구성했을 때만 데이터가 채워집니다.
+- **Scheduler Analytics** — Slurm accounting 위에서 보는 7일짜리 정책 관점.
+  파티션별 큐 대기·실행 시간 분위수, walltime 정확도, 잡 결과, account별
+  GPU 시간을 보여줍니다. 선택적인
+  [sacct textfile collector](slurm.md#스케줄러-분석-선택)가 데이터를
+  채웁니다. 여기서 호출되는 알림은 하나도 없습니다. 잡 성공률 SLO는
+  의도적으로 만들지 않았습니다. 잡 실패의 대부분은 사용자 실수이고, 거기에
+  소진율 알림을 걸면 운영자가 고칠 수 없는 실수로 운영자를 호출하게 되기
+  때문입니다.
