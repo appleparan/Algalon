@@ -110,12 +110,15 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `victoriametrics.storage.size` | `50Gi` | PVC size (StatefulSet) |
 | `victoriametrics.storage.storageClassName` | `""` | `""` = cluster default |
 | `vmagent.scrapeInterval` | `30s` | global scrape interval |
+| `vmagent.extraScrapeConfigs` | `""` | site-supplied `scrape_configs` YAML fragment, appended verbatim — see [Site extensions](#site-extensions) |
 | `vmalert.evaluationInterval` | `30s` | rule evaluation interval |
+| `vmalert.extraRules` | `{}` | site-supplied rule files, `<name>` → content — see [Site extensions](#site-extensions) |
 | `alertmanager.slack.existingSecret` | `""` | Secret with `slack_webhook_critical` / `slack_webhook_warning` |
 | `alertmanager.slack.criticalUrl` | `""` | chart-created Secret instead (not for GitOps) |
 | `alertmanager.slack.warningUrl` | `""` | as above; both URLs required together |
 | `grafana.adminUser` | `admin` | `GF_SECURITY_ADMIN_USER` |
 | `grafana.adminPassword` | `admin` | `GF_SECURITY_ADMIN_PASSWORD` — change it |
+| `grafana.extraDashboards` | `{}` | site-supplied dashboards, `<name>` → JSON — see [Site extensions](#site-extensions) |
 <!-- markdownlint-enable MD013 -->
 
 Every component also takes `image` and `resources`; see `values.yaml`.
@@ -160,6 +163,38 @@ DaemonSet and the `algalon-pods` job discovers it like any other pod, with
 enabling both scrapes the same jobs twice. The queue exporter
 (`slurm.queueTargets`) is always static: it belongs on the slurmctld or a
 login node, which is not part of the cluster.
+
+## Site extensions
+
+Three values let a site attach content the chart doesn't know about, without
+forking it:
+
+- `vmalert.extraRules` — map of `<name>` → full rule-file content. Each
+  entry renders as ConfigMap key `extra-<name>.yml`, alongside (not
+  replacing) the chart's own rule files.
+- `grafana.extraDashboards` — map of `<name>` → dashboard JSON. Each entry
+  renders as ConfigMap key `extra-<name>.json`.
+- `vmagent.extraScrapeConfigs` — a single string: a raw `scrape_configs`
+  list fragment (starting at `- job_name: ...`), appended verbatim to the
+  generated `prometheus.yml`.
+
+Inject at install/upgrade time with `--set-file`, one entry per file:
+
+    helm upgrade algalon deploy/helm/algalon \
+      --set-file 'vmalert.extraRules.h100-serving=path/to/rules.yaml' \
+      --set-file 'grafana.extraDashboards.h100-serving=path/to/dashboard.json' \
+      --set-file 'vmagent.extraScrapeConfigs=path/to/scrape.yaml'
+
+Supply the files with LF line endings — CRLF content keeps literal `\r`
+bytes in the rendered manifest.
+
+Validating injected content is the site's responsibility: the chart's
+`rules-test` / `dashboards-validate` targets cover only the chart's own
+`monitoring/` files, not whatever a site injects through these values.
+
+The vmagent, vmalert and Grafana Deployments already carry `checksum/*`
+annotations on their respective ConfigMaps, so a plain `helm upgrade` with
+updated extra values is enough to roll the pods — no manual restart needed.
 
 ## Validate
 

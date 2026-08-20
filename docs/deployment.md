@@ -72,6 +72,12 @@ One thing to remember: `make helm-sync` must run before the first
 install. Helm cannot read files outside a chart, so the chart's `files/`
 directory is generated from `monitoring/` and is git-ignored.
 
+Sites that need alert rules, dashboards or scrape configs beyond what
+`monitoring/` ships can inject them via `vmalert.extraRules`,
+`grafana.extraDashboards` and `vmagent.extraScrapeConfigs` — see
+[Site extensions](../deploy/helm/algalon/README.md#site-extensions) in the
+chart README.
+
 ## Docker Compose
 
 Two stacks: `deploy/compose/host` (storage, alerting, UI — one machine)
