@@ -21,9 +21,16 @@ to keep its exporters listening.
 | all-smi *(optional)* | Cross-platform accelerator and process-level view |
 | vmagent | Scrapes the exporters and remote-writes into VictoriaMetrics |
 | VictoriaMetrics | Time series storage |
+| VictoriaLogs *(optional)* | Job stdout, pushed at job end by the epilog |
 | vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
 | Grafana | Eight auto-provisioned dashboards |
+
+VictoriaLogs is the one component nothing scrapes: it is written to, by
+`monitoring/slurm/epilog-logpush.sh` running as `EpilogSlurmctld` on the
+Slurm controller. It is off in both deployment paths until you ask for it
+(compose profile `logs`, or `victorialogs.enabled` in the chart) — see
+[Job logs](slurm.md#job-logs-optional).
 
 `monitoring/` is the single source of truth for the rules, dashboards,
 scrape config, Alertmanager policy and the DCGM counter set. Docker

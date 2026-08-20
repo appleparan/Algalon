@@ -21,9 +21,16 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | all-smi *(선택)* | 크로스 플랫폼 가속기 및 프로세스 단위 뷰 |
 | vmagent | exporter를 scrape해 VictoriaMetrics로 remote-write |
 | VictoriaMetrics | 시계열 저장소 |
+| VictoriaLogs *(선택)* | 잡 stdout. epilog가 잡 종료 시 한 번 push |
 | vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
 | Grafana | 자동 프로비저닝되는 여덟 개 대시보드 |
+
+VictoriaLogs는 아무도 scrape하지 않는 유일한 구성 요소입니다. Slurm
+컨트롤러에서 `EpilogSlurmctld`로 도는 `monitoring/slurm/epilog-logpush.sh`가
+이 저장소에 씁니다. 두 배포 경로 모두에서 명시적으로 켜기 전까지는 꺼져
+있습니다(compose `logs` 프로파일, 또는 차트의 `victorialogs.enabled`).
+[잡 로그](slurm.md#잡-로그-선택)를 보세요.
 
 rule, 대시보드, scrape 설정, Alertmanager 정책, DCGM 카운터 세트의 단일
 진실 공급원은 `monitoring/` 디렉터리입니다. Docker Compose는 이 디렉터리를

@@ -88,7 +88,7 @@ explains how the k3s path coexists with the host's training workloads
 | [Architecture](docs/architecture.md) | Component pipeline, the seven rule groups, the alerting policy, the eight dashboards |
 | [Deployment](docs/deployment.md) | Choosing a path, k3s + Docker coexistence, secrets handling |
 | [Development](docs/development.md) | Validation targets, rule unit tests, the k3d end-to-end smoke test |
-| [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join |
+| [Slurm integration](docs/slurm.md) | The two Slurm exporters, target registration, the Slurm alerts and dashboards, the `on(node)` join, the optional job log pipeline |
 
 한국어 문서는 [`docs/ko/`](docs/ko/)에 있습니다.
 
