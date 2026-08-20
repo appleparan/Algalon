@@ -90,3 +90,69 @@ tests:
         groupname: gpu-health
         alertname: GpuClocksThrottled
         exp_alerts: []
+
+  # --- GpuBusyButHollow -------------------------------------------------
+  # gpu01: both GPUs report ~95% utilization while SM_ACTIVE sits at 0.05 -
+  # kernels are resident but nothing is executing. The classic starved
+  # dataloader. gpu02 is the control: same high utilization, but the warps
+  # are genuinely running (SM_ACTIVE 0.85), so it must stay silent.
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_UTIL{node="gpu01", instance="gpu01:9400", gpu="0"}'
+        values: '95x80'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{node="gpu01", instance="gpu01:9400", gpu="1"}'
+        values: '95x80'
+      - series: 'DCGM_FI_PROF_SM_ACTIVE{node="gpu01", instance="gpu01:9400", gpu="0"}'
+        values: '0.05x80'
+      - series: 'DCGM_FI_PROF_SM_ACTIVE{node="gpu01", instance="gpu01:9400", gpu="1"}'
+        values: '0.05x80'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{node="gpu02", instance="gpu02:9400", gpu="0"}'
+        values: '95x80'
+      - series: 'DCGM_FI_PROF_SM_ACTIVE{node="gpu02", instance="gpu02:9400", gpu="0"}'
+        values: '0.85x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: gpu-health
+        alertname: GpuBusyButHollow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: investigate
+              node: gpu01
+            exp_annotations:
+              summary: 'GPUs on gpu01 report 95% utilization but almost no warps are executing (SM active <20% for 30m) - input pipeline, CPU or collective wait, not the GPU'
+      # 10m of hollow running is a checkpoint restore or a data staging
+      # phase, not a broken input pipeline. Below the 30m hold.
+      - eval_time: 10m
+        groupname: gpu-health
+        alertname: GpuBusyButHollow
+        exp_alerts: []
+
+  # Boundary: SM_ACTIVE sits exactly at 0.2. The rule asks for < 0.2, so
+  # the boundary itself is "working", not hollow.
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_UTIL{node="gpu01", instance="gpu01:9400", gpu="0"}'
+        values: '95x80'
+      - series: 'DCGM_FI_PROF_SM_ACTIVE{node="gpu01", instance="gpu01:9400", gpu="0"}'
+        values: '0.2x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: gpu-health
+        alertname: GpuBusyButHollow
+        exp_alerts: []
+
+  # Negative: an idle node. Low SM activity with low utilization is a GPU
+  # nobody is using - that is SlurmJobGpuIdle's territory (or nobody's),
+  # not a hollow-running job.
+  - interval: 30s
+    input_series:
+      - series: 'DCGM_FI_DEV_GPU_UTIL{node="gpu03", instance="gpu03:9400", gpu="0"}'
+        values: '2x80'
+      - series: 'DCGM_FI_PROF_SM_ACTIVE{node="gpu03", instance="gpu03:9400", gpu="0"}'
+        values: '0.01x80'
+    alert_rule_test:
+      - eval_time: 35m
+        groupname: gpu-health
+        alertname: GpuBusyButHollow
+        exp_alerts: []

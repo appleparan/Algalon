@@ -28,3 +28,16 @@ DCGM_FI_DEV_ROW_REMAP_PENDING,             gauge,   Whether row remapping is pen
 DCGM_FI_DEV_PCIE_REPLAY_COUNTER,           counter, Total PCIe retries.
 DCGM_FI_PROF_NVLINK_TX_BYTES,              counter, NVLink transmitted bytes.
 DCGM_FI_PROF_NVLINK_RX_BYTES,              counter, NVLink received bytes.
+# Utilization quality (DCP profiling fields, all 0-1 ratios).
+# DCGM_FI_DEV_GPU_UTIL above only says a kernel was resident on the device:
+# a GPU starved by its dataloader still reads 100%. These four say whether
+# the resident kernel is doing anything - warps executing, tensor cores
+# engaged, memory bandwidth moving. The NVLink counters above are already
+# DCGM_FI_PROF_* fields, so the exporter's DCP path is proven on any fleet
+# running this CSV; these add no new mechanism, only new fields.
+# Requires Volta or newer, conflicts with a concurrent Nsight or profiler
+# session on the same GPU, and costs a small sampling overhead.
+DCGM_FI_PROF_SM_ACTIVE,                    gauge,   Fraction of time at least one warp was active on an SM.
+DCGM_FI_PROF_SM_OCCUPANCY,                 gauge,   Fraction of resident warps against the SM maximum.
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,           gauge,   Fraction of time the tensor (HMMA/IMMA) pipe was active.
+DCGM_FI_PROF_DRAM_ACTIVE,                  gauge,   Fraction of time the device memory interface was active.

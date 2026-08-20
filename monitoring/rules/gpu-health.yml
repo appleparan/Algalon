@@ -47,3 +47,34 @@ groups:
           action: investigate
         annotations:
           summary: 'GPU clocks throttled (reason bitmask {{ $value }}) on {{ $labels.instance }} GPU {{ $labels.gpu }} for 10m'
+
+      # Busy-but-hollow: the GPU reports itself busy while almost no warps
+      # execute. DCGM_FI_DEV_GPU_UTIL only means "a kernel was resident on
+      # the device during the sample" — a job whose dataloader cannot feed
+      # it, or that is blocked in an NCCL all-reduce, keeps a kernel
+      # resident and reads near 100% while doing nothing. SM_ACTIVE is the
+      # next layer down: the fraction of time at least one warp was
+      # actually running. High util with low SM activity is the signature
+      # of an input-pipeline, CPU-bound or collective-wait stall.
+      #
+      # Node-level attribution only. Both averages collapse to `node`, so
+      # on a shared node this mixes tenants — the Phase 6 note applies
+      # unchanged: node-level signals read as job signal only where the
+      # job owns the whole node. The Job Explorer's per-job panels are
+      # where an individual job gets diagnosed.
+      #
+      # 30m of hold skips checkpoint restore, data staging and other
+      # legitimately compute-quiet phases. Absent-safe: DCGM_FI_PROF_* are
+      # DCP fields, so a fleet that has not added them to
+      # monitoring/exporters/dcgm-counters.csv produces no series and this
+      # never fires.
+      - alert: GpuBusyButHollow
+        expr: >-
+          avg by (node) (DCGM_FI_DEV_GPU_UTIL) > 80
+          and avg by (node) (DCGM_FI_PROF_SM_ACTIVE) < 0.2
+        for: 30m
+        labels:
+          severity: warning
+          action: investigate
+        annotations:
+          summary: 'GPUs on {{ $labels.node }} report {{ $value | printf "%.0f" }}% utilization but almost no warps are executing (SM active <20% for 30m) - input pipeline, CPU or collective wait, not the GPU'
