@@ -11,7 +11,7 @@ Explorer (+logs) → L3 Node Health/Checkpoint IO.
 | --- | --- | --- |
 | 1. SLO recording rules (`algalon:sli:*`, group `slo`) + tests + `slo-overview.json` (uid `algalon-slo`) + docs | existing metrics only | ✅ done (`feat/slo-overview`, issue #15) |
 | 2. VictoriaLogs + Slurm epilog log push + Job Explorer logs panel | new components; epilog chosen over tailing to avoid NFS scan load (outputs live on shared NFS) | ✅ done (`feat/job-logs`, issue #17) |
-| 3. sacct textfile collector → queue-wait SLI + Scheduler Analytics dashboard (`algalon-scheduler`) for QoS policy decisions | slurmctld-side script via `nodeExporter.textfileDirectory`; NO burn-rate paging on job success — most failures are user error (controller decision) | ✅ done (`feat/sacct-sli`, issue #20) |
+| 3. sacct textfile collector → queue-wait SLI + Scheduler Analytics dashboard (`algalon-scheduler`) + failure-distribution alerts (`slurm` group) + GPU Utilization Quality dashboard (`algalon-gpu-quality`) as the QoS outcome measure | slurmctld-side script via `nodeExporter.textfileDirectory`. Doctrine: failure *totals* are not pageable (user error dominates), but *concentration* on a node and *breadth* across accounts are infra symptoms and page as warnings. GPU quality = 4 layers (allocated → busy → computing → computing efficiently); `DCGM_FI_DEV_GPU_UTIL` alone is a weak signal | ✅ done (`feat/sacct-sli`, issue #20) |
 <!-- markdownlint-enable MD013 -->
 
 Phase 1 SLIs (instantaneous 0-1 ratios; 30d compliance computed in the

@@ -268,6 +268,12 @@ others:
   [Scheduler analytics](#scheduler-analytics-optional). Only its
   pending-versus-idle panel works without that collector.
 
+The Job Explorer also carries two panels that answer a question the
+scheduler cannot — *are the GPUs this job holds actually computing?* They
+are written for the job's owner rather than for an operator; see
+[GPU utilization quality](architecture.md#gpu-utilization-quality) for
+the four-layer hierarchy they belong to.
+
 ### Metrics and labels
 
 A few details worth knowing before you write your own queries:
@@ -482,7 +488,8 @@ counters monotonic across runs and across reboots — see
 <!-- markdownlint-disable MD013 -->
 | Metric | Type | Labels | The decision it informs |
 | --- | --- | --- | --- |
-| `slurm_jobs_completed_total` | counter | `state`, `partition` | Where outcomes cluster. A `timeout` share that keeps climbing is a walltime limit set below what the work needs; `node_fail` concentrating in one partition points at hardware, not at users |
+| `slurm_jobs_completed_total` | counter | `state`, `partition`, `account` | Where outcomes cluster. A `timeout` share that keeps climbing is a walltime limit set below what the work needs. The `account` breakdown is what makes [failure breadth](#failure-counts-failure-distribution) visible |
+| `slurm_job_node_failures_total` | counter | `node` | **Which node is sick.** FAILED and NODE_FAIL jobs charged to every node they held, with Slurm's compressed nodelists expanded. Flat is normal; a node hoarding failures is a drain candidate |
 | `slurm_job_wait_seconds` | histogram | `partition` | **Partition and QOS limits.** p50 tells you what a typical user experiences, p90 tells you who is being starved. A flat p50 under a climbing p90 means the limits, not the capacity, are the constraint |
 | `slurm_job_runtime_seconds` | histogram | `partition` | **Partition layout.** A partition whose p90 runtime is minutes does not need a multi-day maximum time; one whose p50 already sits near its limit will keep producing timeouts |
 | `slurm_job_timelimit_used_ratio` | histogram | `partition` | **Backfill efficiency.** `Elapsed / Timelimit`. Mass at the low end is padded walltime, and the scheduler cannot backfill a job into a gap it believes is too short — so over-requesting leaves nodes idle in front of a full queue. Mass above 1.0 is the jobs the limit killed |
@@ -503,7 +510,7 @@ jobs that started within 30 minutes of submission. The 30-day version of
 that ratio is a stat tile on **SLO Overview**, recomputed there from the
 raw histogram rather than averaged from the hourly rule, so a busy
 afternoon weighs more than a quiet night. It has no alert — see
-[Why there is no job success SLO](#why-there-is-no-job-success-slo).
+[Failure counts, failure distribution](#failure-counts-failure-distribution).
 
 ### Installing it on the controller
 
@@ -648,25 +655,64 @@ refuses to add. Per-user attribution is an `sacct` query, not a time
 series. (The per-job exporter does carry `user`, but only for jobs that
 are running right now, which is a bounded set.)
 
-### Why there is no job success SLO
+### Failure counts, failure distribution
 
-The obvious thing to build on top of `slurm_jobs_completed_total` is a
-success ratio with burn-rate alerts, and Algalon deliberately does not.
+The obvious thing to build on `slurm_jobs_completed_total` is a success
+ratio with burn-rate alerts, and Algalon deliberately does not.
 
 On a shared research cluster most `FAILED` jobs are user error: a typo in
 a batch script, an OOM from a batch size the user chose, a bad module
-load. Paging an operator for that ratio pages them for a mistake they
-cannot fix, and an operator who cannot act on a page learns to ignore
-every page from the same source — including the ones that mean a node is
-on fire. The cost is not the wasted alert; it is the trust spent on it.
+load. That is as true of one intermittent failure as it is of one user
+failing forty times in a row — the second is not an incident, it is
+somebody debugging. Paging an operator for that ratio pages them for a
+mistake they cannot fix, and an operator who cannot act on a page learns
+to ignore every page from the same source, including the ones that mean a
+node is on fire. The cost is not the wasted alert; it is the trust spent
+on it.
 
-So job outcomes are counted and charted, and nothing in
-`monitoring/rules/` alerts on them. Queue wait is different: it *is*
-something partition and QOS limits control, so it is recorded as an SLI —
-but it too drives dashboards and policy reviews, not notifications. The
-`slurm` rule group keeps its alerts on scheduler faults (`SlurmNodeDown`,
-`SlurmQueueStalledWithIdleNodes`), where the operator is the person who
-can act.
+That argument is airtight, and it only covers the **total**. What user
+error cannot explain is a change in the *distribution* of those failures,
+and there are two axes of it.
+
+**Concentration — one node collecting a disproportionate share.** Users
+do not choose their nodes; the scheduler does, so mistakes land roughly
+uniformly across the fleet. A node that starts hoarding failures is not
+being picked by unluckier people, it is broken: a dying GPU, a bad
+driver, a full local disk, a NIC that drops under load. That is a drain
+candidate, and it is exactly what an operator can act on. Hence
+`slurm_job_node_failures_total{node}` and `SlurmNodeFailureConcentration`,
+which asks for both an absolute floor and a majority share so that
+ordinary attrition landing on one node stays quiet.
+
+The `node` label deliberately carries the same values as every other
+`node` label in Algalon (see [The `on(node)` join
+contract](#the-onnode-join-contract)). Two things follow. The suspect
+node can be looked up immediately in Node Health and DCGM for the
+corroborating hardware evidence; and the Alertmanager inhibit rule —
+node-scoped criticals suppress warnings on the same node — silences the
+concentration warning automatically when a critical such as
+`GpuXidFellOffBus` has already named the cause. The failures are that
+critical's symptom, not a second incident.
+
+**Breadth — failures across many accounts at once.** One user's mistake
+is confined to that user's account by construction. It cannot make three
+unrelated teams fail in the same half hour. Shared infrastructure can: a
+filesystem that went away, a sick slurmctld, an expired credential, a bad
+module update. Hence the `account` label and
+`SlurmFailureSpreadAcrossAccounts`, which requires both several accounts
+*and* real volume — three accounts failing one job each is a quiet
+afternoon.
+
+And one case needs no inference at all: `SlurmNodeFailJobs` fires on
+Slurm's own `NODE_FAIL` verdict. No user can put a job into that state,
+so it is never user error by definition.
+
+All four signals are warnings with `action: investigate`, all live in
+`monitoring/rules/slurm.yml` next to the other scheduler alerts, and all
+are silent on a cluster without the collector.
+
+The principle in one line: **failure counts measure users; failure
+distribution measures the cluster.**
 
 ### What could still surprise you
 
@@ -685,6 +731,12 @@ can act.
   never ran would drag every quantile toward the floor.
 - **`UNLIMITED` and `Partition_Limit` walltimes** have no used-ratio and
   are absent from `slurm_job_timelimit_used_ratio` entirely.
+- **Node names must match your `node` labels.** `slurm_job_node_failures_total`
+  takes its node names from Slurm's own nodelist. If your scrape targets
+  label the same machines differently, the failure counter will not line
+  up with DCGM or node-exporter — the same caveat that applies to
+  slurm-job-exporter targets, and the same fix: make the label values
+  identical strings.
 - **Array and heterogeneous jobs** are counted per allocation
   (`--allocations`), so a 1000-task array contributes 1000 rows, one per
   task, and no separate row for the array as a whole.
