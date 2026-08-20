@@ -10,6 +10,15 @@ dcgmExporter:
     - key: nvidia.com/gpu
       operator: Exists
   runtimeClassName: ""
+  # Extra CLI args appended to the container command. Main use: connect to
+  # a host-side nv-hostengine instead of embedding one, e.g.
+  # ["-r", "localhost:5555"] together with hostNetwork: true — required
+  # when another DCGM client (e.g. slurm-job-exporter) shares the node,
+  # because two engines cannot both watch DCGM_FI_PROF_* fields.
+  extraArgs: []
+  # Share the host network namespace so extraArgs can reach a host-side
+  # nv-hostengine at localhost. Off by default (embedded engine).
+  hostNetwork: false
   # Out-of-cluster dcgm-exporters scraped in addition to the DaemonSet pods —
   # bare-metal GPU nodes that are not cluster members. Every entry carries the
   # node label by hand (there is no kubernetes_sd to derive it from); it must
@@ -50,13 +59,29 @@ allSmi:
     requests: {cpu: 100m, memory: 128Mi}
 
 # -- Slurm integration (optional) --
-# Both exporters run OUTSIDE the cluster on Slurm hosts; list them here.
 slurm:
   enabled: false
   # prometheus-slurm-exporter on the slurmctld/login node (queue/partition state)
   queueTargets: []        # e.g. ["slurmctld.example.internal:9092"]
-  # slurm-job-exporter on every compute node (per-job cgroup/GPU accounting)
+  # slurm-job-exporter on compute nodes that are NOT cluster members,
+  # running host-side (systemd) and enumerated statically.
   jobTargets: []          # e.g. [{address: "gpu01.example.internal:9798", node: "gpu01"}]
+  # In-cluster alternative to jobTargets: run slurm-job-exporter as a
+  # DaemonSet on compute nodes that ARE cluster members. Discovered by the
+  # algalon-pods kubernetes_sd job (no scrape-config change), node label
+  # comes from kubernetes_sd. Requires a host-side nv-hostengine on every
+  # selected node — the exporter is a remote DCGM client via hostNetwork
+  # (localhost:5555). Enable EITHER this OR jobTargets for a given node
+  # set; both at once double-scrapes the same jobs.
+  jobExporter:
+    enabled: false
+    image: ghcr.io/appleparan/slurm-job-exporter:0.5.0
+    port: 9798
+    dcgmUpdateInterval: 10
+    nodeSelector: {}
+    tolerations: []
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
 
 # -- Host stack --
 host:

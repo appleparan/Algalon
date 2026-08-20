@@ -22,6 +22,11 @@ spec:
       annotations:
         checksum/counters: {{ .Files.Get "files/exporters/dcgm-counters.csv" | sha256sum }}
     spec:
+      {{- if .Values.dcgmExporter.hostNetwork }}
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       {{- with .Values.dcgmExporter.runtimeClassName }}
       runtimeClassName: {{ . }}
       {{- end }}
@@ -36,7 +41,7 @@ spec:
       containers:
         - name: dcgm-exporter
           image: {{ .Values.dcgmExporter.image }}
-          args: ["-f", "/etc/dcgm-exporter/counters.csv"]
+          args: ["-f", "/etc/dcgm-exporter/counters.csv"{{ range .Values.dcgmExporter.extraArgs }}, {{ . | quote }}{{ end }}]
           env:
             - name: NVIDIA_VISIBLE_DEVICES
               value: all
