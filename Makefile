@@ -1,6 +1,6 @@
 # Algalon Makefile — monitoring validation and deployment helpers
 
-.PHONY: help rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate helm-sync helm-validate e2e-k3d
+.PHONY: help rules-validate rules-test scrape-validate alertmanager-validate compose-validate dashboards-validate helm-sync helm-validate e2e-k3d release
 
 # Default target
 help: ## Show this help message
@@ -78,3 +78,10 @@ helm-validate: helm-sync ## Lint and schema-validate the Helm chart
 # pipeline actually evaluate rules and route alerts.
 e2e-k3d: ## Run k3d end-to-end smoke test
 	@bash tests/e2e/k3d-smoke.sh
+
+release: ## Cut a release (usage: make release VERSION=0.5.0)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "usage: make release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@bash scripts/release.sh $(VERSION)
