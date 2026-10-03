@@ -92,6 +92,81 @@ are registered by copying the target templates on the host; all-smi is
 opt-in via `--profile all-smi`. This is the shortest path for a single
 machine or a small, static fleet.
 
+## CPU memory bandwidth (optional)
+
+A GPU node whose host memory bus is saturated — data loaders, pinned-memory
+copies — looks idle on every DCGM metric and normal on every node_exporter
+metric: PSI measures stalls and NUMA counters measure placement, neither
+measures bandwidth. The only kernel interface to it is resctrl MBM
+(Memory Bandwidth Monitoring), so Algalon ships
+`monitoring/exporters/resctrl-mbm-textfile.sh`, which writes the counters
+as a node_exporter textfile for the Host Saturation dashboard. Like the
+Slurm scripts it is a site-side artifact: Algalon never deploys or
+schedules it.
+
+**It is built to cost nothing on the workload.** Reading an MBM file makes
+the kernel read one hardware counter per L3 domain, so the cost is
+groups × domains × frequency. The script reads only the default monitor
+group, once per run, with no daemon: a handful of reads every 30 s. It
+never creates monitor groups, never writes `schemata`, and never mounts
+resctrl itself. The price of that choice is resolution: you get bandwidth
+per node and L3 domain, not per job. Per-job groups would add an RMID per
+job and MSR writes on the workload's own context switches, which is the
+overhead this design avoids.
+
+Install on each node you want measured, as root:
+
+```bash
+grep -c cqm_mbm_total /proc/cpuinfo            # 0 = this CPU has no MBM
+mount -t resctrl resctrl /sys/fs/resctrl       # do not add -o mba_MBps
+install -m 0755 monitoring/exporters/resctrl-mbm-textfile.sh \
+  /usr/local/bin/algalon-resctrl-mbm-textfile
+```
+
+```ini
+# /etc/systemd/system/algalon-resctrl-mbm.service
+[Unit]
+Description=Algalon resctrl MBM textfile export
+ConditionPathIsDirectory=/sys/fs/resctrl
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/algalon-resctrl-mbm-textfile
+Nice=19
+IOSchedulingClass=idle
+```
+
+```ini
+# /etc/systemd/system/algalon-resctrl-mbm.timer
+[Unit]
+Description=Run the Algalon resctrl MBM export every 30 s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+```
+
+Then `systemctl daemon-reload && systemctl enable --now
+algalon-resctrl-mbm.timer`. The resctrl mount does not survive a reboot
+unless you add it to `/etc/fstab`.
+
+node-exporter must read the directory the script writes to
+(`/var/lib/node_exporter/textfile` by default). The compose worker stack
+does so out of the box (`NODE_EXPORTER_TEXTFILE_DIR`); in the chart set
+`nodeExporter.textfileDirectory`.
+
+Limits, none of them verified on hardware by this project: AMD CPUs can
+return `Unavailable` when hardware counters run out, which shows up as
+gaps, never as zeros; Sub-NUMA Clustering needs a recent kernel for
+correct values; and the dashboard draws no "100%" line because the
+platform's peak bandwidth is not exported — compare against the node's
+own history or a STREAM run. Where MBM is unavailable, Intel PCM or AMD
+uProf measure the same thing outside this pipeline.
+
 ## Secrets
 
 Slack webhook URLs are always injected at deploy time — a mounted secret

@@ -14,8 +14,20 @@ DCGM_FI_DEV_POWER_USAGE,                   gauge,   Power draw (in W).
 DCGM_FI_DEV_ENFORCED_POWER_LIMIT,          gauge,   Enforced power limit (in W).
 DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,      counter, Total energy consumption since boot (in mJ).
 DCGM_FI_DEV_CLOCKS_EVENT_REASONS,          gauge,   Current reasons for clock events (throttling bitmask).
+# Cumulative time spent clock-limited, in ns. The bitmask above says WHY the
+# clocks are down right now; these say HOW LONG, so rate()/1e9 gives the
+# throttled share of wall time (GPU Efficiency). Plain device fields - no
+# profiling, no extra sampling cost.
+DCGM_FI_DEV_POWER_VIOLATION,               counter, Throttling duration due to power constraints (in ns).
+DCGM_FI_DEV_THERMAL_VIOLATION,             counter, Throttling duration due to thermal constraints (in ns).
 # Failure detection (spec §5.1, §5.2)
 DCGM_FI_DEV_XID_ERRORS,                    gauge,   Value of the last XID error encountered.
+# Exporter-computed, not a DCGM field: XID events seen per GPU within a
+# sliding window (5 min default, -x / DCGM_EXPORTER_XID_COUNT_WINDOW_SIZE),
+# labelled by `xid` code. XID_ERRORS above keeps only the LAST code, so two
+# different faults inside one scrape interval collapse into one; this keeps
+# both. Listing it here is what switches the exporter's XID collector on.
+DCGM_EXP_XID_ERRORS_COUNT,                 gauge,   XID errors observed during the configured time window.
 DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,             counter, Total volatile single-bit ECC errors.
 DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,             counter, Total volatile double-bit ECC errors.
 DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,             counter, Total aggregate single-bit ECC errors.
@@ -28,6 +40,14 @@ DCGM_FI_DEV_ROW_REMAP_PENDING,             gauge,   Whether row remapping is pen
 DCGM_FI_DEV_PCIE_REPLAY_COUNTER,           counter, Total PCIe retries.
 DCGM_FI_PROF_NVLINK_TX_BYTES,              counter, NVLink transmitted bytes.
 DCGM_FI_PROF_NVLINK_RX_BYTES,              counter, NVLink received bytes.
+# NVLink link errors, cumulative per GPU (summed over its links). A link
+# that retransmits slows every collective it carries while GPU utilization
+# looks unchanged, so these explain a GPU falling behind its peers. Plain
+# device fields, not DCP.
+DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL, counter, Total number of NVLink flow-control CRC errors.
+DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL, counter, Total number of NVLink data CRC errors.
+DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,   counter, Total number of NVLink retries.
+DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL, counter, Total number of NVLink recovery errors.
 # Utilization quality (DCP profiling fields, all 0-1 ratios).
 # DCGM_FI_DEV_GPU_UTIL above only says a kernel was resident on the device:
 # a GPU starved by its dataloader still reads 100%. These four say whether
@@ -41,3 +61,20 @@ DCGM_FI_PROF_SM_ACTIVE,                    gauge,   Fraction of time at least on
 DCGM_FI_PROF_SM_OCCUPANCY,                 gauge,   Fraction of resident warps against the SM maximum.
 DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,           gauge,   Fraction of time the tensor (HMMA/IMMA) pipe was active.
 DCGM_FI_PROF_DRAM_ACTIVE,                  gauge,   Fraction of time the device memory interface was active.
+# Per-GPU efficiency drill-down (Algalon / GPU Efficiency). Same DCP path and
+# same caveats as the block above - only more fields from it. GR_ENGINE is
+# the coarsest any-work-on-the-engine signal; the FP pipes split the
+# non-tensor arithmetic so FP32 fallback from missing mixed precision is
+# visible; the PCIe fields catch a GPU waiting on host copies. Each extra
+# DCP field adds to the profiling sample, and DCGM may need more than one
+# hardware pass to collect them all on older architectures, which lowers
+# the effective sampling rate of every DCGM_FI_PROF_* field. Drop this
+# block if that cost shows up.
+# PCIe fields are rates (bytes/s), not counters - typed gauge as in the
+# upstream dcgm-exporter default list.
+DCGM_FI_PROF_GR_ENGINE_ACTIVE,             gauge,   Ratio of time the graphics engine is active.
+DCGM_FI_PROF_PIPE_FP64_ACTIVE,             gauge,   Ratio of cycles the fp64 pipes are active.
+DCGM_FI_PROF_PIPE_FP32_ACTIVE,             gauge,   Ratio of cycles the fp32 pipes are active.
+DCGM_FI_PROF_PIPE_FP16_ACTIVE,             gauge,   Ratio of cycles the fp16 pipes are active.
+DCGM_FI_PROF_PCIE_TX_BYTES,                gauge,   PCIe transmit rate including headers and payload (in B/s).
+DCGM_FI_PROF_PCIE_RX_BYTES,                gauge,   PCIe receive rate including headers and payload (in B/s).

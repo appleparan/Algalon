@@ -44,6 +44,11 @@ analysis).
   build early warning on DCGM metrics alone.
 - NFS metrics require node_exporter's `--collector.mountstats` flag (off by
   default). Removing that flag silently kills the `storage-nfs.yml` rule group.
+- node_exporter's `--collector.vmstat.fields` regex is shared by the Host
+  Saturation dashboard and the `node-precursor` rules. It must keep matching
+  `pgpg` (`node_vmstat_pgpgout`); change it in compose and Helm together.
+- `meminfo_numa` series carry the NUMA node in `exported_node`; `node` stays
+  the host name.
 - Metric prefixes by layer: `DCGM_FI_*` (GPU), `node_*` (OS), `all_smi_*`
   (optional cross-platform). Dashboards and rules must not mix layers for the
   same signal.
