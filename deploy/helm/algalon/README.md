@@ -95,7 +95,7 @@ It powers the `algalon-allsmi` dashboard, which stays empty otherwise.
 | `nodeExporter.enabled` | `true` | host metrics DaemonSet (hostNetwork/hostPID) |
 | `nodeExporter.port` | `9100` | host port, not just a container port |
 | `nodeExporter.staticTargets` | `[]` | out-of-cluster node-exporters, `{address, node}` entries |
-| `nodeExporter.textfileDirectory` | `""` | hostPath with `*.prom` files; enables `--collector.textfile.directory` |
+| `nodeExporter.textfileDirectory` | `""` | hostPath with `*.prom` files (sacct or resctrl MBM collectors); enables `--collector.textfile.directory` |
 | `allSmi.enabled` | `false` | optional unified GPU exporter |
 | `allSmi.interval` | `5` | sampling interval, seconds |
 | `slurm.jobExporter.enabled` | `false` | in-cluster slurm-job-exporter DaemonSet; alternative to `slurm.jobTargets` |

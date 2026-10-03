@@ -17,14 +17,14 @@ vmagent가 30초마다 scrape하기 때문에, 워커가 할 일은 exporter를 
 | 구성 요소 | 역할 |
 | --- | --- |
 | dcgm-exporter | GPU 텔레메트리: XID 에러, ECC 및 row-remap 카운터, 온도, 전력, throttling |
-| node-exporter | OS 텔레메트리: 인터럽트, 실행 가능 프로세스, page-out, NFS `mountstats` |
+| node-exporter | OS 텔레메트리: 인터럽트, 실행 가능 프로세스, page-out, NFS `mountstats`, 그리고 호스트 포화 입력(PSI, NUMA, 페이지 회수) |
 | all-smi *(선택)* | 크로스 플랫폼 가속기 및 프로세스 단위 뷰 |
 | vmagent | exporter를 scrape해 VictoriaMetrics로 remote-write |
 | VictoriaMetrics | 시계열 저장소 |
 | VictoriaLogs *(선택)* | 잡 stdout. epilog가 잡 종료 시 한 번 push |
 | vmalert | rule 그룹을 30초마다 평가하고 recording rule을 다시 기록 |
 | Alertmanager | 알림을 라우팅·그룹핑·억제하고 Slack으로 전달 |
-| Grafana | 자동 프로비저닝되는 열 개 대시보드 |
+| Grafana | 자동 프로비저닝되는 열두 개 대시보드 |
 
 VictoriaLogs는 아무도 scrape하지 않는 유일한 구성 요소입니다. Slurm
 컨트롤러에서 `EpilogSlurmctld`로 도는 `monitoring/slurm/epilog-logpush.sh`가
@@ -141,7 +141,7 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
 
 ## 대시보드
 
-`monitoring/dashboards/`의 Grafana 대시보드 열 개가 **Algalon** 폴더로
+`monitoring/dashboards/`의 Grafana 대시보드 열두 개가 **Algalon** 폴더로
 자동 프로비저닝됩니다.
 
 - **SLO Overview** — 증상부터 보는 진입점. 각 SLI의 30일 준수율을 SLO
@@ -171,6 +171,21 @@ critical로 호출 중인 노드의 warning은 억제합니다. 웹훅 URL은 �
   때문입니다.
 - **GPU Utilization Quality** — 클러스터의 GPU 시간이 실제로 일을 하고
   있는가? 아래 [GPU 활용도 품질](#gpu-활용도-품질)을 보세요.
+- **GPU Efficiency (per-GPU)** — GPU Utilization Quality의 드릴다운입니다.
+  노드와 GPU를 고르면 같은 네 계층을 그 장치에 대해 따라가고, 이어서
+  메모리 대역폭 판정과 이상 신호(XID 횟수, 스로틀 시간, NVLink 오류,
+  클럭)를 보여줍니다. 클러스터 대시보드는 볼 노드를 찾고, 이 대시보드는
+  이유를 설명합니다. 잡 소유 관계는 노드 단위로만 표시합니다. Slurm 잡
+  exporter의 `gpu` 인덱스는 cgroup 기준이라 DCGM의 호스트 인덱스와 조인할
+  수 없기 때문입니다.
+- **Host Saturation (USE)** — 잡은 느린데 GPU가 한가할 때 보는 곳입니다.
+  이때 병목은 GPU 앞단에 있습니다. 노드 하나를 위에서 아래로 읽습니다:
+  압력(PSI), CPU, 메모리와 NUMA, 디스크, 네트워크, InfiniBand, CPU 메모리
+  대역폭. Node Health는 전조 메트릭 네 개로 "이 노드가 동료 노드에서
+  벗어나고 있는가"를 묻고, 이 대시보드는 이미 의심되는 노드에서 "어느
+  호스트 자원이 포화됐는가"를 묻습니다. 메모리 대역폭 섹션은 선택 사항인
+  [resctrl MBM collector](deployment.md#cpu-메모리-대역폭-선택)를 설치하기
+  전까지 비어 있습니다.
 
 ## GPU 활용도 품질
 
@@ -190,7 +205,7 @@ all-reduce에서 막혀 있는 잡도 커널은 올라가 있으므로 아무것
 | 1. 할당됨 | 이 GPU를 붙잡고 있는 잡이 있는가? | `slurm_job_utilization_gpu` (잡별 cgroup) | `SlurmJobGpuIdle`, Slurm Job Explorer |
 | 2. 바쁨 | 커널이 디바이스에 올라와 있는가? | `DCGM_FI_DEV_GPU_UTIL` | GPU Fleet Overview — **단독으로는 약함**: 올라와 있는 것과 실행 중인 것은 다르고, 굶주렸거나 막힌 커널도 100%를 기록합니다 |
 | 3. 실제로 계산 중 | warp가 실행되고 있는가? | `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY` | GPU Utilization Quality, `GpuBusyButHollow` |
-| 4. 효율적으로 계산 중 | 사려던 연산 유닛을 쓰고 있는가? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality |
+| 4. 효율적으로 계산 중 | 사려던 연산 유닛을 쓰고 있는가? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality, GPU Efficiency (per-GPU) |
 <!-- markdownlint-enable MD013 -->
 
 전력 대 제한값은 따로 언급할 만합니다. 두 메트릭 모두 기본 카운터 세트에 있어서

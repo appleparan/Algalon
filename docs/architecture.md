@@ -17,14 +17,14 @@ to keep its exporters listening.
 | Component | Role |
 | --- | --- |
 | dcgm-exporter | GPU telemetry: XID errors, ECC and row-remap counters, temperature, power, throttling |
-| node-exporter | OS telemetry: interrupts, runnable processes, page-outs, NFS `mountstats` |
+| node-exporter | OS telemetry: interrupts, runnable processes, page-outs, NFS `mountstats`, plus the host saturation inputs (PSI, NUMA, page reclaim) |
 | all-smi *(optional)* | Cross-platform accelerator and process-level view |
 | vmagent | Scrapes the exporters and remote-writes into VictoriaMetrics |
 | VictoriaMetrics | Time series storage |
 | VictoriaLogs *(optional)* | Job stdout, pushed at job end by the epilog |
 | vmalert | Evaluates the rule groups every 30 s; writes recording rules back |
 | Alertmanager | Routes, groups and inhibits alerts; delivers to Slack |
-| Grafana | Ten auto-provisioned dashboards |
+| Grafana | Twelve auto-provisioned dashboards |
 
 VictoriaLogs is the one component nothing scrapes: it is written to, by
 `monitoring/slurm/epilog-logpush.sh` running as `EpilogSlurmctld` on the
@@ -146,7 +146,7 @@ notifier.
 
 ## Dashboards
 
-Ten Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
+Twelve Grafana dashboards in `monitoring/dashboards/`, auto-provisioned
 into the **Algalon** folder:
 
 - **SLO Overview** — the symptom-first entry point: 30-day compliance
@@ -177,6 +177,22 @@ into the **Algalon** folder:
   them would page operators for mistakes they cannot fix.
 - **GPU Utilization Quality** — is the fleet's GPU time doing any work?
   See [GPU utilization quality](#gpu-utilization-quality) below.
+- **GPU Efficiency (per-GPU)** — the drill-down under GPU Utilization
+  Quality. Pick a node and its GPUs and walk the same four layers for
+  those devices, then a memory-bandwidth verdict and the anomaly signals
+  (XID count, throttle time, NVLink errors, clocks). The fleet dashboard
+  finds the node worth looking at; this one says why. Job ownership is
+  shown at node level only, because the Slurm job exporter's `gpu` index
+  is cgroup-relative and cannot be joined to DCGM's host index.
+- **Host Saturation (USE)** — where to look when a job is slow and its
+  GPUs are idle: the bottleneck is then in front of the GPU. One node,
+  read top to bottom: pressure (PSI), CPU, memory and NUMA, disk, network,
+  InfiniBand, CPU memory bandwidth. Node Health asks "is this node
+  drifting from its peers?" with four precursor metrics; this dashboard
+  asks "which host resource is saturated?" once a node is already
+  suspect. The memory-bandwidth section is empty until the optional
+  [resctrl MBM collector](deployment.md#cpu-memory-bandwidth-optional)
+  is installed.
 
 ## GPU utilization quality
 
@@ -197,7 +213,7 @@ is waste:
 | 1. Allocated | Is a job holding this GPU at all? | `slurm_job_utilization_gpu` (per-job cgroup) | `SlurmJobGpuIdle`; Slurm Job Explorer |
 | 2. Busy | Is a kernel resident on the device? | `DCGM_FI_DEV_GPU_UTIL` | GPU Fleet Overview — **weak on its own**: resident is not the same as running, and a starved or blocked kernel still scores 100% |
 | 3. Actually computing | Are warps executing? | `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY` | GPU Utilization Quality; `GpuBusyButHollow` |
-| 4. Computing efficiently | Is it using the units it was bought for? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality |
+| 4. Computing efficiently | Is it using the units it was bought for? | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | GPU Utilization Quality; GPU Efficiency (per-GPU) |
 <!-- markdownlint-enable MD013 -->
 
 Power against the enforced limit deserves its own mention: it is a layer-4

@@ -83,6 +83,80 @@ README의 [Site extensions](../../deploy/helm/algalon/README.md#site-extensions)
 선택해서 켭니다. 단일 머신이나 규모가 작고 잘 바뀌지 않는 클러스터라면 이
 방식이 가장 빠릅니다.
 
+## CPU 메모리 대역폭 (선택)
+
+호스트 메모리 버스가 포화된 GPU 노드는(데이터 로더, pinned-memory 복사)
+모든 DCGM 메트릭에서 한가해 보이고 모든 node_exporter 메트릭에서 정상으로
+보입니다. PSI는 정체를, NUMA 카운터는 배치를 잴 뿐 대역폭을 재지 않기
+때문입니다. 대역폭을 볼 수 있는 커널 인터페이스는 resctrl MBM(Memory
+Bandwidth Monitoring)뿐이어서, Algalon은
+`monitoring/exporters/resctrl-mbm-textfile.sh`를 제공합니다. 이 스크립트는
+카운터를 node_exporter textfile로 써서 Host Saturation 대시보드에
+공급합니다. Slurm 스크립트와 마찬가지로 사이트 쪽 산출물이며, Algalon이
+배포하거나 스케줄링하지 않습니다.
+
+**워크로드에 비용을 주지 않도록 만들었습니다.** MBM 파일을 읽으면 커널이
+L3 도메인마다 하드웨어 카운터를 한 번 읽으므로, 비용은 그룹 수 × 도메인 수
+× 빈도입니다. 스크립트는 기본 모니터 그룹만, 실행당 한 번, 데몬 없이
+읽습니다. 30초마다 읽기 몇 번입니다. 모니터 그룹을 만들지 않고,
+`schemata`에 쓰지 않으며, resctrl을 직접 마운트하지도 않습니다. 그 대가는
+해상도입니다. 노드와 L3 도메인 단위의 대역폭만 얻고 잡 단위는 얻지
+못합니다. 잡별 그룹은 잡마다 RMID를 쓰고 워크로드의 컨텍스트 스위치에 MSR
+쓰기를 더하는데, 이 설계가 피하려는 부담이 바로 그것입니다.
+
+측정할 노드마다 root로 설치합니다.
+
+```bash
+grep -c cqm_mbm_total /proc/cpuinfo            # 0이면 이 CPU는 MBM 미지원
+mount -t resctrl resctrl /sys/fs/resctrl       # -o mba_MBps는 붙이지 않습니다
+install -m 0755 monitoring/exporters/resctrl-mbm-textfile.sh \
+  /usr/local/bin/algalon-resctrl-mbm-textfile
+```
+
+```ini
+# /etc/systemd/system/algalon-resctrl-mbm.service
+[Unit]
+Description=Algalon resctrl MBM textfile export
+ConditionPathIsDirectory=/sys/fs/resctrl
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/algalon-resctrl-mbm-textfile
+Nice=19
+IOSchedulingClass=idle
+```
+
+```ini
+# /etc/systemd/system/algalon-resctrl-mbm.timer
+[Unit]
+Description=Run the Algalon resctrl MBM export every 30 s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+```
+
+이어서 `systemctl daemon-reload && systemctl enable --now
+algalon-resctrl-mbm.timer`를 실행합니다. resctrl 마운트는 `/etc/fstab`에
+추가하지 않으면 재부팅 후 사라집니다.
+
+node-exporter는 스크립트가 쓰는 디렉터리(기본값
+`/var/lib/node_exporter/textfile`)를 읽어야 합니다. compose 워커 스택은
+기본으로 읽고(`NODE_EXPORTER_TEXTFILE_DIR`), 차트에서는
+`nodeExporter.textfileDirectory`를 설정합니다.
+
+한계는 다음과 같고, 이 프로젝트가 하드웨어에서 검증한 것은 없습니다. AMD
+CPU는 하드웨어 카운터가 모자라면 `Unavailable`을 돌려주며, 이는 0이 아니라
+빈 구간으로 나타납니다. Sub-NUMA Clustering은 최신 커널에서만 값이
+정확합니다. 플랫폼의 최대 대역폭은 내보내지 않으므로 대시보드에 "100%"
+선이 없습니다. 노드 자신의 과거 값이나 STREAM 실행 결과와 비교하세요.
+MBM을 쓸 수 없는 곳에서는 Intel PCM이나 AMD uProf가 이 파이프라인 밖에서
+같은 것을 측정합니다.
+
 ## 시크릿
 
 Slack 웹훅 URL은 항상 배포 시점에 주입합니다. Compose에서는 마운트된 시크릿
