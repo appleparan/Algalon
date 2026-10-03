@@ -24,6 +24,25 @@ services:
   # (spec §3). host network+pid so /proc reflects the node, not the
   # container. --collector.mountstats is REQUIRED — without it the entire
   # storage-nfs rule group is silently inert.
+  # The remaining collector flags feed Algalon / Host Saturation (USE); each
+  # one missing leaves its panels silently empty, nothing fails:
+  #   --collector.meminfo_numa       per-NUMA-node free memory and miss/foreign
+  #                                  counters (off by default).
+  #   --collector.vmstat.fields      default set plus pgscan*/pgsteal* (page
+  #                                  reclaim). Must keep pgpg: node-precursor
+  #                                  alerts read node_vmstat_pgpgout.
+  #   --collector.filesystem.mount-points-exclude
+  #                                  default minus /dev, so /dev/shm is
+  #                                  collected (other /dev mounts are already
+  #                                  dropped by the fs-type exclude).
+  # pressure, schedstat, softnet and infiniband are on by default in this
+  # image; disabling them empties the PSI, scheduler-wait, softnet and IB
+  # panels.
+  # Textfile collector: host directory (NODE_EXPORTER_TEXTFILE_DIR) where
+  # host-side scripts such as monitoring/exporters/resctrl-mbm-textfile.sh
+  # write *.prom files. Mounted at its host path, read-only. An empty
+  # directory is harmless; without the mount the memory-bandwidth panels
+  # stay empty.
   node-exporter:
     image: prom/node-exporter:v1.12.1
     container_name: algalon-node-exporter
@@ -34,11 +53,16 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - ${NODE_EXPORTER_TEXTFILE_DIR:-/var/lib/node_exporter/textfile}:${NODE_EXPORTER_TEXTFILE_DIR:-/var/lib/node_exporter/textfile}:ro
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
       - '--collector.mountstats'
+      - '--collector.meminfo_numa'
+      - '--collector.vmstat.fields=^(oom_kill|pgpg|pswp|pg.*fault|pgscan|pgsteal).*'
+      - '--collector.filesystem.mount-points-exclude=^/(proc|run/credentials/.+|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)'
+      - '--collector.textfile.directory=${NODE_EXPORTER_TEXTFILE_DIR:-/var/lib/node_exporter/textfile}'
       - '--web.listen-address=:${NODE_EXPORTER_PORT:-9100}'
 
   # Optional cross-platform / process-level exporter (spec §2: opt-in

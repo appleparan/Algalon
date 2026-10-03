@@ -41,6 +41,18 @@ spec:
             - --path.sysfs=/host/sys
             - --path.rootfs=/rootfs
             - --collector.mountstats
+            # Host Saturation (USE) dashboard inputs; same set and rationale
+            # as deploy/compose/worker/docker-compose.yml. Each one missing
+            # leaves its panels silently empty:
+            #   meminfo_numa   per-NUMA free memory and miss/foreign (off by default)
+            #   vmstat.fields  default set plus pgscan*/pgsteal* (page reclaim);
+            #                  must keep pgpg - node-precursor alerts read
+            #                  node_vmstat_pgpgout
+            #   mount-points-exclude  default minus /dev, so /dev/shm is collected
+            # pressure, schedstat, softnet and infiniband are on by default.
+            - --collector.meminfo_numa
+            - '--collector.vmstat.fields=^(oom_kill|pgpg|pswp|pg.*fault|pgscan|pgsteal).*'
+            - '--collector.filesystem.mount-points-exclude=^/(proc|run/credentials/.+|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)'
             {{- if .Values.nodeExporter.textfileDirectory }}
             - --collector.textfile.directory={{ .Values.nodeExporter.textfileDirectory }}
             {{- end }}
